@@ -9,6 +9,7 @@ from vllm.config import MemPoolConfig
 logger = init_logger(__name__)
 
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
+session = None
 
 class PushdownResponse:
     hidden_states: torch.tensor
@@ -17,27 +18,31 @@ class PushdownResponse:
 class Attention_pushdown():
 
     def __init__(self, config: MemPoolConfig) -> None:
-        self.session = None
+        # self.session = None
         self.host = config.host
         self.port = config.port
-        self.init_session()
         self.headers = {
             "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}"
         }
+        self.session_running = False
 
     def init_session(self):
-        self.session = \
+        global session
+        session = \
             aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=AIOHTTP_TIMEOUT))
+        self.session_running = True
 
     async def close_session(self):
-        await self.session.close()
+        global session
+        await session.close()
 
     async def pushdown_and_retrieve(self, q, k, v) -> PushdownResponse:
         # preprocessing q,k,v
 
         output = PushdownResponse()
         try:
-            async with self.session.post() as response:
+            global session
+            async with session.post() as response:
                 if response.status == 200:
                     pass
                 else:

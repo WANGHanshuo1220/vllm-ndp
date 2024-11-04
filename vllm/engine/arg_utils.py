@@ -163,7 +163,7 @@ class EngineArgs:
     override_neuron_config: Optional[Dict[str, Any]] = None
 
     # DNP memory pool args
-    mp_eanble: Optional[bool] = None
+    mp_enable: Optional[bool] = None
     mp_host: Optional[str] = None
     mp_port: Optional[str] = None
 
@@ -773,6 +773,20 @@ class EngineArgs:
             default=None,
             help="override or set neuron device configuration.")
 
+        # Add some config for attention pushdown
+        parser.add_argument(
+            "--mp-enable",
+            action="store_true",
+            default=False,
+            help=
+            "Enable memory pool for attention pushdown.")
+        parser.add_argument("--mp-host",
+                            type=nullable_str,
+                            default=None,
+                            help="Memory pool host name")
+        parser.add_argument("--mp-port", type=int, default=9000, 
+                            help="Mempry pool port number")
+
         return parser
 
     @classmethod
@@ -1033,7 +1047,7 @@ class EngineArgs:
                 "Set --disable-sliding-window to disable sliding window.")
         
         mp_config = MemPoolConfig.may_be_create(
-            enable=self.mp_eanble,
+            enable=self.mp_enable,
             host=self.mp_host,
             port=self.mp_port
         )

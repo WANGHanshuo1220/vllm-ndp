@@ -1845,6 +1845,28 @@ class ObservabilityConfig:
                 "requires --otlp-traces-endpoint to be set.")
 
 
+@dataclass
+class MemPoolConfig:
+    """Configuration for remote DNP memory pool"""
+
+    def may_be_create(
+        enable: bool,
+        host: str,
+        port: str,
+    ):
+        if enable in True:
+            return MemPoolConfig(
+                enable, host, port)
+        else:
+            return None
+    
+    def __init__(self, enable, host, post):
+        self.enable = enable
+        self.host = host
+        self.port = post
+
+    
+
 @dataclass(frozen=True)
 class EngineConfig:
     """Dataclass which contains all engine-related configuration. This
@@ -1862,6 +1884,7 @@ class EngineConfig:
     decoding_config: Optional[DecodingConfig]
     observability_config: Optional[ObservabilityConfig]
     prompt_adapter_config: Optional[PromptAdapterConfig]
+    mem_pool_config: Optional[MemPoolConfig]
 
     def __post_init__(self):
         """Verify configs are valid & consistent with each other.

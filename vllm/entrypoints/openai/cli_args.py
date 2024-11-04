@@ -190,6 +190,20 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
                         'ID numbers being printed in log.'
                         '\n\nDefault: Unlimited')
 
+    # Add some config for attention pushdown
+    parser.add_argument(
+        "--enable-mp",
+        action="store_true",
+        default=False,
+        help=
+        "Enable memory pool for attention pushdown.")
+    parser.add_argument("--mp-host",
+                        type=nullable_str,
+                        default=None,
+                        help="Memory pool host name")
+    parser.add_argument("--mp-port", type=int, default=9000, 
+                        help="Mempry pool port number")
+
     return parser
 
 

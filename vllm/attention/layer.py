@@ -6,10 +6,12 @@ import torch.nn as nn
 
 from vllm.attention import AttentionMetadata, AttentionType
 from vllm.attention.selector import get_attn_backend
-from vllm.config import CacheConfig
+from vllm.config import CacheConfig, MemPoolConfig
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 from vllm.model_executor.layers.quantization.kv_cache import BaseKVCacheMethod
+
+from vllm.mem_pool.client import Attention_pushdown
 
 
 class Attention(nn.Module):
@@ -33,8 +35,10 @@ class Attention(nn.Module):
         alibi_slopes: Optional[List[float]] = None,
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
+        mp_config: Optional[MemPoolConfig] = None,
         blocksparse_params: Optional[Dict[str, Any]] = None,
         logits_soft_cap: Optional[float] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
         prefix: str = "",
     ) -> None:
         super().__init__()
@@ -84,6 +88,12 @@ class Attention(nn.Module):
         self.impl = impl_cls(num_heads, head_size, scale, num_kv_heads,
                              alibi_slopes, sliding_window, kv_cache_dtype,
                              blocksparse_params, logits_soft_cap)
+
+        # Create attention pushdown session
+        if mem_pool_config is not None:
+            self.attn_pushdown = Attention_pushdown(mem_pool_config)
+        else:
+            self.attn_pushdown = None
 
     def forward(
         self,

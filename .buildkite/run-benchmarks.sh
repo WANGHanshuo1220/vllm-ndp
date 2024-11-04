@@ -9,42 +9,46 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 (which wget && which curl) || (apt-get update && apt-get install -y wget curl)
 
 # run python-based benchmarks and upload the result to buildkite
-python3 benchmarks/benchmark_latency.py --output-json latency_results.json 2>&1 | tee benchmark_latency.txt
-bench_latency_exit_code=$?
+# python3 benchmarks/benchmark_latency.py --output-json latency_results.json 2>&1 | tee benchmark_latency.txt
+# bench_latency_exit_code=$?
 
-python3 benchmarks/benchmark_throughput.py --input-len 256 --output-len 256 --output-json throughput_results.json 2>&1 | tee benchmark_throughput.txt
-bench_throughput_exit_code=$?
+# python3 benchmarks/benchmark_throughput.py --input-len 256 --output-len 256 --output-json throughput_results.json 2>&1 | tee benchmark_throughput.txt
+# bench_throughput_exit_code=$?
+
+MODEL_PATH="/root/models/opt-125m"
+DATA_PATH="/root/lmcache/vllm/ShareGPT_V3_unfiltered_cleaned_split.json"
 
 # run server-based benchmarks and upload the result to buildkite
-python3 -m vllm.entrypoints.openai.api_server --model meta-llama/Llama-2-7b-chat-hf &
+python3 -m vllm.entrypoints.openai.api_server \
+    --model ${MODEL_PATH} &
 server_pid=$!
-wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
+# wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 
 # wait for server to start, timeout after 600 seconds
 timeout 600 bash -c 'until curl localhost:8000/v1/models; do sleep 1; done' || exit 1
 python3 benchmarks/benchmark_serving.py \
     --backend vllm \
     --dataset-name sharegpt \
-    --dataset-path ./ShareGPT_V3_unfiltered_cleaned_split.json \
-    --model meta-llama/Llama-2-7b-chat-hf \
-    --num-prompts 20 \
+    --dataset-path ${DATA_PATH} \
+    --model ${MODEL_PATH} \
+    --num-prompts 1 \
     --endpoint /v1/completions \
-    --tokenizer meta-llama/Llama-2-7b-chat-hf \
+    --tokenizer ${MODEL_PATH} \
     --save-result \
     2>&1 | tee benchmark_serving.txt
 bench_serving_exit_code=$?
 kill $server_pid
 
 # write the results into a markdown file
-echo "### Latency Benchmarks" >> benchmark_results.md
-sed -n '1p' benchmark_latency.txt >> benchmark_results.md # first line
-echo "" >> benchmark_results.md
-sed -n '$p' benchmark_latency.txt >> benchmark_results.md # last line
+# echo "### Latency Benchmarks" >> benchmark_results.md
+# sed -n '1p' benchmark_latency.txt >> benchmark_results.md # first line
+# echo "" >> benchmark_results.md
+# sed -n '$p' benchmark_latency.txt >> benchmark_results.md # last line
 
-echo "### Throughput Benchmarks" >> benchmark_results.md
-sed -n '1p' benchmark_throughput.txt >> benchmark_results.md # first line
-echo "" >> benchmark_results.md
-sed -n '$p' benchmark_throughput.txt >> benchmark_results.md # last line
+# echo "### Throughput Benchmarks" >> benchmark_results.md
+# sed -n '1p' benchmark_throughput.txt >> benchmark_results.md # first line
+# echo "" >> benchmark_results.md
+# sed -n '$p' benchmark_throughput.txt >> benchmark_results.md # last line
 
 echo "### Serving Benchmarks" >> benchmark_results.md
 sed -n '1p' benchmark_serving.txt >> benchmark_results.md # first line

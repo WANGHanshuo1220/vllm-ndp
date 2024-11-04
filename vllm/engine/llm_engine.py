@@ -16,7 +16,7 @@ from vllm.config import (CacheConfig, DecodingConfig, DeviceConfig,
                          EngineConfig, LoadConfig, LoRAConfig, ModelConfig,
                          ObservabilityConfig, ParallelConfig,
                          PromptAdapterConfig, SchedulerConfig,
-                         SpeculativeConfig)
+                         SpeculativeConfig, MemPoolConfig)
 from vllm.core.scheduler import (ScheduledSequenceGroup, Scheduler,
                                  SchedulerOutputs)
 from vllm.engine.arg_utils import EngineArgs
@@ -219,6 +219,7 @@ class LLMEngine:
         usage_context: UsageContext = UsageContext.ENGINE_CONTEXT,
         stat_loggers: Optional[Dict[str, StatLoggerBase]] = None,
         input_registry: InputRegistry = INPUT_REGISTRY,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ) -> None:
         logger.info(
             "Initializing an LLM engine (v%s) with config: "
@@ -285,6 +286,7 @@ class LLMEngine:
         self.prompt_adapter_config = prompt_adapter_config
         self.observability_config = observability_config or ObservabilityConfig(
         )
+        self.mem_pool_config = mem_pool_config
         self.log_stats = log_stats
 
         if not self.model_config.skip_tokenizer_init:
@@ -325,6 +327,7 @@ class LLMEngine:
             load_config=load_config,
             prompt_adapter_config=prompt_adapter_config,
             observability_config=self.observability_config,
+            mem_pool_config = self.mem_pool_config,
         )
 
         if not self.model_config.embedding_mode:

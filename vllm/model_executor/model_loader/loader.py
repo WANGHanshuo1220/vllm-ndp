@@ -21,7 +21,7 @@ from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 
 from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoadFormat,
                          LoRAConfig, ModelConfig, MultiModalConfig,
-                         ParallelConfig, SchedulerConfig)
+                         ParallelConfig, SchedulerConfig, MemPoolConfig)
 from vllm.envs import VLLM_USE_MODELSCOPE
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization.base_config import (
@@ -149,7 +149,8 @@ def build_model(model_class: Type[nn.Module], hf_config: PretrainedConfig,
                 quant_config: Optional[QuantizationConfig], *,
                 lora_config: Optional[LoRAConfig],
                 multimodal_config: Optional[MultiModalConfig],
-                scheduler_config: Optional[SchedulerConfig]) -> nn.Module:
+                scheduler_config: Optional[SchedulerConfig],
+                mem_pool_config: Optional[MemPoolConfig]) -> nn.Module:
     extra_kwargs = _get_model_initialization_kwargs(model_class, lora_config,
                                                     multimodal_config,
                                                     scheduler_config)
@@ -157,6 +158,7 @@ def build_model(model_class: Type[nn.Module], hf_config: PretrainedConfig,
     return model_class(config=hf_config,
                        cache_config=cache_config,
                        quant_config=quant_config,
+                       mem_pool_config=mem_pool_config,
                        **extra_kwargs)
 
 
@@ -165,7 +167,8 @@ def _initialize_model(
         load_config: LoadConfig,
         lora_config: Optional[LoRAConfig],
         cache_config: CacheConfig,
-        scheduler_config: Optional[SchedulerConfig] = None) -> nn.Module:
+        scheduler_config: Optional[SchedulerConfig] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None) -> nn.Module:
     """Initialize a model with the given configurations."""
     model_class, _ = get_model_architecture(model_config)
 
@@ -177,6 +180,7 @@ def _initialize_model(
         lora_config=lora_config,
         multimodal_config=model_config.multimodal_config,
         scheduler_config=scheduler_config,
+        mem_pool_config=mem_pool_config,
     )
 
 
@@ -351,13 +355,15 @@ class DefaultModelLoader(BaseModelLoader):
                    lora_config: Optional[LoRAConfig],
                    parallel_config: ParallelConfig,
                    scheduler_config: SchedulerConfig,
-                   cache_config: CacheConfig) -> nn.Module:
+                   cache_config: CacheConfig,
+                   mem_pool_config: MemPoolConfig) -> nn.Module:
         target_device = torch.device(device_config.device)
         with set_default_torch_dtype(model_config.dtype):
             with target_device:
                 model = _initialize_model(model_config, self.load_config,
                                           lora_config, cache_config,
-                                          scheduler_config)
+                                          scheduler_config,
+                                          mem_pool_config=mem_pool_config)
             model.load_weights(
                 self._get_weights_iterator(model_config.model,
                                            model_config.revision,

@@ -12,7 +12,7 @@ from vllm.config import (CacheConfig, ConfigFormat, DecodingConfig,
                          DeviceConfig, EngineConfig, LoadConfig, LoadFormat,
                          LoRAConfig, ModelConfig, ObservabilityConfig,
                          ParallelConfig, PromptAdapterConfig, SchedulerConfig,
-                         SpeculativeConfig, TokenizerPoolConfig)
+                         SpeculativeConfig, TokenizerPoolConfig, MemPoolConfig)
 from vllm.executor.executor_base import ExecutorBase
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QUANTIZATION_METHODS
@@ -161,6 +161,11 @@ class EngineArgs:
     collect_detailed_traces: Optional[str] = None
     disable_async_output_proc: bool = False
     override_neuron_config: Optional[Dict[str, Any]] = None
+
+    # DNP memory pool args
+    mp_eanble: Optional[bool] = None
+    mp_host: Optional[str] = None
+    mp_port: Optional[str] = None
 
     def __post_init__(self):
         if self.tokenizer is None:
@@ -1026,6 +1031,13 @@ class EngineArgs:
             raise ValueError(
                 "Chunked prefill is not supported with sliding window. "
                 "Set --disable-sliding-window to disable sliding window.")
+        
+        mp_config = MemPoolConfig.may_be_create(
+            enable=self.mp_eanble,
+            host=self.mp_host,
+            port=self.mp_port
+        )
+
 
         return EngineConfig(
             model_config=model_config,
@@ -1039,6 +1051,7 @@ class EngineArgs:
             decoding_config=decoding_config,
             observability_config=observability_config,
             prompt_adapter_config=prompt_adapter_config,
+            mem_pool_config=mp_config,
         )
 
 

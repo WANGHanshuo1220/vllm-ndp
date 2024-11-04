@@ -20,7 +20,7 @@ from vllm.attention.backends.abstract import AttentionState
 from vllm.attention.backends.utils import CommonAttentionState
 from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          ModelConfig, ObservabilityConfig, ParallelConfig,
-                         PromptAdapterConfig, SchedulerConfig)
+                         PromptAdapterConfig, SchedulerConfig, MemPoolConfig)
 from vllm.core.scheduler import SchedulerOutputs
 from vllm.distributed import get_pp_group
 from vllm.distributed.parallel_state import graph_capture
@@ -914,6 +914,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         observability_config: Optional[ObservabilityConfig] = None,
         input_registry: InputRegistry = INPUT_REGISTRY,
         mm_registry: MultiModalRegistry = MULTIMODAL_REGISTRY,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ):
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -926,6 +927,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.prompt_adapter_config = prompt_adapter_config
         self.return_hidden_states = return_hidden_states
         self.observability_config = observability_config
+        self.mem_pool_config = mem_pool_config
 
         self.device = self.device_config.device
         self.pin_memory = is_pin_memory_available()
@@ -1002,7 +1004,8 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
                                    lora_config=self.lora_config,
                                    parallel_config=self.parallel_config,
                                    scheduler_config=self.scheduler_config,
-                                   cache_config=self.cache_config)
+                                   cache_config=self.cache_config,
+                                   mem_pool_config=self.mem_pool_config)
 
         self.model_memory_usage = m.consumed_memory
         logger.info("Loading model weights took %.4f GB",
@@ -1543,6 +1546,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             model_forward_end = torch.cuda.Event(enable_timing=True)
             model_forward_start.record()
 
+        # print(f"model_input.input_tokens = {model_input.input_tokens}")
+        # print(f"model_input.input_positions = {model_input.input_positions}")
+        # print(f"model_input.attn_metadata = {model_input.attn_metadata}")
         hidden_or_intermediate_states = model_executable(
             input_ids=model_input.input_tokens,
             positions=model_input.input_positions,

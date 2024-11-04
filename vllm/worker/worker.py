@@ -10,7 +10,7 @@ import vllm.envs as envs
 from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          ModelConfig, ObservabilityConfig, ParallelConfig,
                          PromptAdapterConfig, SchedulerConfig,
-                         SpeculativeConfig)
+                         SpeculativeConfig, MemPoolConfig)
 from vllm.distributed import (ensure_model_parallel_initialized,
                               init_distributed_environment,
                               set_custom_all_reduce)
@@ -57,6 +57,7 @@ class Worker(LocalOrDistributedWorkerBase):
         is_driver_worker: bool = False,
         model_runner_cls: Optional[Type[GPUModelRunnerBase]] = None,
         observability_config: Optional[ObservabilityConfig] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ) -> None:
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -79,6 +80,7 @@ class Worker(LocalOrDistributedWorkerBase):
             from vllm.utils import init_cached_hf_modules
             init_cached_hf_modules()
         self.observability_config = observability_config
+        self.mem_pool_config = mem_pool_config
 
         # Return hidden states from target model if the draft model is an
         # mlp_speculator
@@ -109,6 +111,7 @@ class Worker(LocalOrDistributedWorkerBase):
             prompt_adapter_config=prompt_adapter_config,
             observability_config=observability_config,
             **speculative_args,
+            mem_pool_config=mem_pool_config,
         )
         # Uninitialized cache engine. Will be initialized by
         # initialize_cache.

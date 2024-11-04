@@ -4,7 +4,7 @@ from typing import List, Optional, Set, Tuple
 from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          ModelConfig, ObservabilityConfig, ParallelConfig,
                          PromptAdapterConfig, SchedulerConfig,
-                         SpeculativeConfig)
+                         SpeculativeConfig, MemPoolConfig)
 from vllm.lora.request import LoRARequest
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.prompt_adapter.request import PromptAdapterRequest
@@ -33,6 +33,7 @@ class ExecutorBase(ABC):
         speculative_config: Optional[SpeculativeConfig],
         prompt_adapter_config: Optional[PromptAdapterConfig],
         observability_config: Optional[ObservabilityConfig],
+        mem_pool_config: Optional[MemPoolConfig],
     ) -> None:
         self.model_config = model_config
         self.cache_config = cache_config
@@ -44,6 +45,7 @@ class ExecutorBase(ABC):
         self.speculative_config = speculative_config
         self.prompt_adapter_config = prompt_adapter_config
         self.observability_config = observability_config
+        self.mem_pool_config = mem_pool_config
         self._init_executor()
 
     @abstractmethod

@@ -24,7 +24,7 @@ from torch import nn
 from transformers import OPTConfig
 
 from vllm.attention import Attention, AttentionMetadata
-from vllm.config import CacheConfig
+from vllm.config import (CacheConfig, MemPoolConfig)
 from vllm.distributed import get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.activation import get_act_fn
 from vllm.model_executor.layers.linear import (ColumnParallelLinear,
@@ -64,6 +64,7 @@ class OPTAttention(nn.Module):
         bias: bool = True,
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
@@ -92,7 +93,8 @@ class OPTAttention(nn.Module):
                               self.head_dim,
                               scale=self.scaling,
                               cache_config=cache_config,
-                              quant_config=quant_config)
+                              quant_config=quant_config,
+                              mem_pool_config=mem_pool_config,)
 
     def forward(
         self,
@@ -114,6 +116,7 @@ class OPTDecoderLayer(nn.Module):
         config: OPTConfig,
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ):
         super().__init__()
         self.config = config
@@ -124,6 +127,7 @@ class OPTDecoderLayer(nn.Module):
             bias=config.enable_bias,
             cache_config=cache_config,
             quant_config=quant_config,
+            mem_pool_config=mem_pool_config,
         )
         self.do_layer_norm_before = config.do_layer_norm_before
 
@@ -189,6 +193,7 @@ class OPTDecoder(nn.Module):
         config: OPTConfig,
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ):
         super().__init__()
         self.config = config
@@ -233,7 +238,7 @@ class OPTDecoder(nn.Module):
             self.final_layer_norm = None
 
         self.layers = nn.ModuleList([
-            OPTDecoderLayer(config, cache_config, quant_config)
+            OPTDecoderLayer(config, cache_config, quant_config, mem_pool_config)
             for _ in range(config.num_hidden_layers)
         ])
 
@@ -273,9 +278,11 @@ class OPTModel(nn.Module):
         config: OPTConfig,
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ):
         super().__init__()
-        self.decoder = OPTDecoder(config, cache_config, quant_config)
+        self.decoder = OPTDecoder(config, cache_config, 
+                                  quant_config, mem_pool_config)
 
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.decoder.get_input_embeddings(input_ids)
@@ -302,11 +309,13 @@ class OPTForCausalLM(nn.Module):
         config,
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ):
         super().__init__()
         self.config = config
         self.quant_config = quant_config
-        self.model = OPTModel(config, cache_config, quant_config)
+        self.model = OPTModel(config, cache_config, 
+                              quant_config, mem_pool_config)
         if self.config.tie_word_embeddings:
             self.lm_head = self.model.decoder.embed_tokens
         else:

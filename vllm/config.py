@@ -1854,7 +1854,7 @@ class MemPoolConfig:
         host: str,
         port: str,
     ):
-        if enable in True:
+        if enable is True:
             return MemPoolConfig(
                 enable, host, port)
         else:

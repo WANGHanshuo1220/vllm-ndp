@@ -3,7 +3,7 @@ import json
 import os
 import torch
 import aiohttp
-from logger import init_logger
+from vllm.logger import init_logger
 from vllm.config import MemPoolConfig
 
 logger = init_logger(__name__)

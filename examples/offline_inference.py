@@ -11,7 +11,7 @@ prompts = [
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
 
 # Create an LLM.
-llm = LLM(model="/root/models/opt-125m", 
+llm = LLM(model="/root/models/opt-125m",
           mp_enable=True, mp_host="localhost", mp_port="9999")
 # Generate texts from the prompts. The output is a list of RequestOutput objects
 # that contain the prompt, generated text, and other information.

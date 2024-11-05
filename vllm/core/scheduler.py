@@ -505,7 +505,7 @@ class Scheduler:
             curr_loras: Currently batched lora request ids. The argument is
                 in-place updated when any decodes are preempted.
             enable_chunking: If True, seq group can be chunked and only a
-                chunked number of tokens are scheduled  if
+                chunked number of tokens are scheduled if
                 `budget.num_batched_tokens` has not enough capacity to schedule
                 all tokens.
     

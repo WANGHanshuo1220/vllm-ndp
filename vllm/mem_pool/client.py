@@ -93,6 +93,6 @@ class Attention_pushdown():
             url = self.base_url + "/check_health"
             async with session.get(url=url) as response:
                 if response.status == 200:
-                    logger.info(f"Check health success")
+                    pass
         except Exception as e:
             print(f"Error: {e}")

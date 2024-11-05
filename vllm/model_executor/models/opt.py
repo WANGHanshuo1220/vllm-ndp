@@ -42,7 +42,8 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 import asyncio
-
+from vllm.utils import (get_distributed_init_method, get_ip, get_open_port,
+                        make_async)
 
 class OPTLearnedPositionalEmbedding(nn.Embedding):
 
@@ -98,7 +99,7 @@ class OPTAttention(nn.Module):
                               quant_config=quant_config,
                               mem_pool_config=mem_pool_config,)
 
-    async def forward(
+    def forward(
         self,
         hidden_states: torch.Tensor,
         kv_cache: torch.Tensor,
@@ -106,7 +107,7 @@ class OPTAttention(nn.Module):
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
-        attn_output = await self.attn(q, k, v, kv_cache, attn_metadata)
+        attn_output = self.attn(q, k, v, kv_cache, attn_metadata)
         output, _ = self.out_proj(attn_output)
         return output
 
@@ -154,7 +155,7 @@ class OPTDecoderLayer(nn.Module):
             self.embed_dim,
             elementwise_affine=config.layer_norm_elementwise_affine)
 
-    async def forward(
+    def forward(
         self,
         hidden_states: torch.Tensor,
         kv_cache: torch.Tensor,
@@ -165,7 +166,7 @@ class OPTDecoderLayer(nn.Module):
         # 125m, 1.7B, ..., 175B applies layer norm BEFORE attention
         if self.do_layer_norm_before:
             hidden_states = self.self_attn_layer_norm(hidden_states)
-        hidden_states = await self.self_attn(hidden_states=hidden_states,
+        hidden_states = self.self_attn(hidden_states=hidden_states,
                                        kv_cache=kv_cache,
                                        attn_metadata=attn_metadata)
         hidden_states = residual + hidden_states
@@ -247,7 +248,7 @@ class OPTDecoder(nn.Module):
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.embed_tokens(input_ids)
 
-    async def forward(
+    def forward(
         self,
         input_ids: torch.Tensor,
         positions: torch.Tensor,
@@ -264,7 +265,7 @@ class OPTDecoder(nn.Module):
 
         for i in range(len(self.layers)):
             layer = self.layers[i]
-            hidden_states = await layer(hidden_states, kv_caches[i], attn_metadata)
+            hidden_states = layer(hidden_states, kv_caches[i], attn_metadata)
 
         if self.final_layer_norm is not None:
             hidden_states = self.final_layer_norm(hidden_states)
@@ -289,7 +290,7 @@ class OPTModel(nn.Module):
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.decoder.get_input_embeddings(input_ids)
 
-    async def forward(
+    def forward(
         self,
         input_ids: torch.Tensor,
         positions: torch.Tensor,
@@ -297,7 +298,7 @@ class OPTModel(nn.Module):
         attn_metadata: AttentionMetadata,
         inputs_embeds: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        return await self.decoder(input_ids,
+        return self.decoder(input_ids,
                             positions,
                             kv_caches,
                             attn_metadata,
@@ -334,10 +335,8 @@ class OPTForCausalLM(nn.Module):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
     ) -> torch.Tensor:
-        loop = asyncio.get_event_loop()
-        hidden_states = loop.run_until_complete(
-            self.model(input_ids, positions, kv_caches,
-                       attn_metadata))
+        hidden_states = self.model(input_ids, positions, 
+                                   kv_caches,attn_metadata)
         return hidden_states
 
     def compute_logits(

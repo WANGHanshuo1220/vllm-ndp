@@ -56,19 +56,21 @@ async def calculate_attention(query: str, context: str):
     attention_result = {"query": query, "context": context, "attention_score": 0.95}
     return attention_result
 
+
 @router.get("/check_health")
 async def health() -> Response:
     """Health check."""
     print("check health")
     return Response(status_code=200)
 
-@router.post("/store_kv_cache")
+
+@router.post("/store_kv")
 async def store_kv_cache_endpoint(key: str, value: str):
     result = await store_kv_cache(key, value)
     return result
 
 
-@router.post("/calculate_attention")
+@router.post("/compute_attention")
 async def calculate_attention_endpoint(query: str, context: str):
     result = await calculate_attention(query, context)
     return result
@@ -78,7 +80,6 @@ async def init_app(args):
     app = FastAPI(lifespan=lifespan)
     app.include_router(router)
     app.root_path = args.root_path
-
     return app
 
 

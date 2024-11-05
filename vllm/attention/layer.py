@@ -12,6 +12,7 @@ from vllm.model_executor.layers.quantization.base_config import (
 from vllm.model_executor.layers.quantization.kv_cache import BaseKVCacheMethod
 
 from vllm.mem_pool.client import Attention_pushdown
+import asyncio
 
 
 class Attention(nn.Module):
@@ -96,7 +97,7 @@ class Attention(nn.Module):
             Attention._attn_pushdown is None):
             Attention._attn_pushdown = Attention_pushdown(mem_pool_config)
 
-    async def forward(
+    def forward(
         self,
         query: torch.Tensor,
         key: torch.Tensor,
@@ -107,7 +108,9 @@ class Attention(nn.Module):
     ) -> torch.Tensor:
 
         if Attention._attn_pushdown is not None:
-            await Attention._attn_pushdown.call()
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(
+                Attention._attn_pushdown.call())
         return self.impl.forward(query,
                                  key,
                                  value,

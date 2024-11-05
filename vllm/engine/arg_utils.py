@@ -784,7 +784,7 @@ class EngineArgs:
                             type=nullable_str,
                             default=None,
                             help="Memory pool host name")
-        parser.add_argument("--mp-port", type=int, default=9000, 
+        parser.add_argument("--mp-port", type=int, default=9999, 
                             help="Mempry pool port number")
 
         return parser

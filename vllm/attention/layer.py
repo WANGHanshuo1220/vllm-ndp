@@ -26,6 +26,8 @@ class Attention(nn.Module):
     3. Return the output tensor.
     """
 
+    _attn_pushdown = None
+
     def __init__(
         self,
         num_heads: int,
@@ -90,12 +92,11 @@ class Attention(nn.Module):
                              blocksparse_params, logits_soft_cap)
 
         # Create attention pushdown session
-        if mem_pool_config is not None:
-            self.attn_pushdown = Attention_pushdown(mem_pool_config)
-        else:
-            self.attn_pushdown = None
+        if (mem_pool_config is not None and \
+            Attention._attn_pushdown is None):
+            Attention._attn_pushdown = Attention_pushdown(mem_pool_config)
 
-    def forward(
+    async def forward(
         self,
         query: torch.Tensor,
         key: torch.Tensor,
@@ -105,6 +106,7 @@ class Attention(nn.Module):
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
 
+        await Attention._attn_pushdown.call()
         return self.impl.forward(query,
                                  key,
                                  value,

@@ -16,16 +16,17 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # bench_throughput_exit_code=$?
 
 MODEL_PATH="/root/models/opt-125m"
-DATA_PATH="/root/lmcache/vllm/ShareGPT_V3_unfiltered_cleaned_split.json"
+DATA_PATH="/root/lmcache/ShareGPT_V3_unfiltered_cleaned_split.json"
 
 # run server-based benchmarks and upload the result to buildkite
 python3 -m vllm.entrypoints.openai.api_server \
-    --model ${MODEL_PATH} &
+    --model ${MODEL_PATH} \
+    --mp-enable &
 server_pid=$!
 # wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 
 # wait for server to start, timeout after 600 seconds
-timeout 600 bash -c 'until curl localhost:8000/v1/models; do sleep 1; done' || exit 1
+timeout 600 bash -c 'until curl localhost:8000/v1/models > /dev/null 2>&1; do sleep 1; done' || exit 1
 python3 benchmarks/benchmark_serving.py \
     --backend vllm \
     --dataset-name sharegpt \

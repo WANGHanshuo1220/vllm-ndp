@@ -18,7 +18,6 @@ class PushdownResponse:
 class Attention_pushdown():
 
     def __init__(self, config: MemPoolConfig) -> None:
-        # self.session = None
         self.host = config.host
         self.port = config.port
         self.headers = {
@@ -30,20 +29,48 @@ class Attention_pushdown():
 
     def init_session(self):
         global session
-        session = \
-            aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=AIOHTTP_TIMEOUT))
+        session = aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT)
         self.session_running = True
 
     async def close_session(self):
         global session
         await session.close()
+        self.session_running = False
 
-    async def pushdown_and_retrieve(self, q, k, v) -> PushdownResponse:
+    async def compute_attention(self, q, k, v) -> PushdownResponse:
+        # Check session is on
+        if self.session_running is False:
+            self.init_session()
+
         # preprocessing q,k,v
 
         output = PushdownResponse()
         try:
             global session
+            url = self.base_url + "/compute_attention"
+            async with session.post() as response:
+                if response.status == 200:
+                    pass
+                else:
+                    output.hidden_states = None
+                    output.success = False
+        except Exception:
+            logger.warning(f"pushdown connection timeout, restarting session...")
+            self.close_session()
+            self.init_session()
+            logger.warning(f"restarting session complete")
+    
+    async def store_kv(self, q, k, v) -> PushdownResponse:
+        # Check session is on
+        if self.session_running is False:
+            self.init_session()
+
+        # preprocessing q,k,v
+
+        output = PushdownResponse()
+        try:
+            global session
+            url = self.base_url + "/store_kv"
             async with session.post() as response:
                 if response.status == 200:
                     pass
@@ -57,22 +84,15 @@ class Attention_pushdown():
             logger.warning(f"restarting session complete")
     
     async def call(self):
+        # Check if session is on
+        if self.session_running is False:
+            self.init_session()
+
         try:
             global session
-            # url = self.base_url + "/health"
-            # payload = {
-            #     "key": "hello",
-            #     "value": "world"
-            # }
-            url = "http://10.210.22.147:32438/"
-            async with session.post(url=url) as response:
+            url = self.base_url + "/check_health"
+            async with session.get(url=url) as response:
                 if response.status == 200:
-                    response_data = await response.json()
-                    print(f"Response Status: {response.status}")
-                    print(f"Response Data: {response_data}")
-        except Exception:
-            pass
-            # logger.warning(f"pushdown connection timeout, restarting session...")
-            # self.close_session()
-            # self.init_session()
-            # logger.warning(f"restarting session complete")
+                    logger.info(f"Check health success")
+        except Exception as e:
+            print(f"Error: {e}")

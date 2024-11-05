@@ -56,13 +56,7 @@ async def calculate_attention(query: str, context: str):
     attention_result = {"query": query, "context": context, "attention_score": 0.95}
     return attention_result
 
-@router.get("/")
-async def empty() -> Response:
-    """Health check."""
-    print("recieve")
-    return Response(status_code=200)
-
-@router.get("/health")
+@router.get("/check_health")
 async def health() -> Response:
     """Health check."""
     print("check health")

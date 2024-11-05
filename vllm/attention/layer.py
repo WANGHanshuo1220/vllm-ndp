@@ -106,7 +106,8 @@ class Attention(nn.Module):
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
 
-        await Attention._attn_pushdown.call()
+        if Attention._attn_pushdown is not None:
+            await Attention._attn_pushdown.call()
         return self.impl.forward(query,
                                  key,
                                  value,

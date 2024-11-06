@@ -1561,6 +1561,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                                          device=self.device),
             **seqlen_agnostic_kwargs)
 
+        # TODO:Here if this request is prefill, the generated blocks should 
+        # be stored remotely. [(engine_id, req_id): kv] should be transfered
+        
+
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):
             model_forward_end.record()

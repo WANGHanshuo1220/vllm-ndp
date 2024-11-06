@@ -333,10 +333,6 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             **kwargs,
         )
 
-        # TODO:Here if this request is prefill, the generated blocks should 
-        # be stored remotely. [(engine_id, req_id): kv] should be transfered
-        
-
         model_execute_time = time.perf_counter() - start_time
         if not get_pp_group().is_last_rank:
             # output is IntermediateTensors

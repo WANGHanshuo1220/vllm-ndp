@@ -84,6 +84,11 @@ endif()
 
 message(STATUS "CPU extension compile flags: ${CXX_COMPILE_FLAGS}")
 
+set(DNNL_LIBRARY_PATH /root/.miniconda/envs/vllm-mp/lib)
+
+# 添加库路径以确保 CMake 能找到 dnnl
+link_directories(${DNNL_LIBRARY_PATH})
+
 list(APPEND LIBS dnnl numa)
 
 #

@@ -291,6 +291,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
             seq_group.get_seqs(status=SequenceStatus.WAITING)[0])
         cross_num_required_blocks = self._get_seq_num_required_blocks(
             seq_group.get_encoder_seq())
+        assert cross_num_required_blocks == 0
         num_required_blocks = self_num_required_blocks + \
                               cross_num_required_blocks
 
@@ -338,6 +339,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
 
     def allocate(self, seq_group: SequenceGroup) -> None:
         is_encoder_decoder = seq_group.is_encoder_decoder()
+        assert is_encoder_decoder == False
         check_no_caching_or_swa_for_blockmgr_encdec(self, seq_group)
 
         # Allocate decoder sequences
@@ -360,6 +362,7 @@ class BlockSpaceManagerV1(BlockSpaceManager):
 
         # Allocate encoder sequence
         if is_encoder_decoder:
+            assert False
             # A SequenceGroup has only a single encoder sequence (at most),
             # thus allocate with a ref count of 1
             block_table = self._allocate_sequence(seq_group.get_encoder_seq(),

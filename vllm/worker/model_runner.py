@@ -1546,9 +1546,11 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             model_forward_end = torch.cuda.Event(enable_timing=True)
             model_forward_start.record()
 
-        # print(f"model_input.input_tokens = {model_input.input_tokens}")
-        # print(f"model_input.input_positions = {model_input.input_positions}")
-        # print(f"model_input.attn_metadata = {model_input.attn_metadata}")
+        print(f"model_input.input_tokens = {model_input.input_tokens}")
+        print(f"model_input.input_positions = {model_input.input_positions}")
+        print(f"model_input.num_prefill = {model_input.attn_metadata.num_prefills}")
+        print(f"model_input.attn_metadata = {model_input.attn_metadata.block_tables}")
+        print("===========================")
         hidden_or_intermediate_states = model_executable(
             input_ids=model_input.input_tokens,
             positions=model_input.input_positions,

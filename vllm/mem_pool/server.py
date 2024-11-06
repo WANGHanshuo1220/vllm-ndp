@@ -22,12 +22,18 @@ from vllm.entrypoints.launcher import serve_http
 from vllm.logger import init_logger
 from vllm.utils import FlexibleArgumentParser
 
-from vllm.mem_pool.util import make_arg_parser
+from vllm.config import EngineConfig
+from vllm.engine.arg_utils import AsyncEngineArgs
+from vllm.entrypoints.openai.cli_args import make_arg_parser
+from vllm.mem_pool.util import add_arg_parser
+from vllm.mem_pool.engine import engine
 
 router = APIRouter()
 _running_tasks: Set[asyncio.Task] = set()
 
 logger = init_logger('vllm.entrypoints.openai.api_server')
+
+mp_engine: engine = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,12 +72,18 @@ async def health() -> Response:
 
 @router.post("/store_kv")
 async def store_kv_cache_endpoint(key: str, value: str):
+    global mp_engine
+    assert mp_engine is not None
+
     result = await store_kv_cache(key, value)
     return result
 
 
 @router.post("/compute_attention")
 async def calculate_attention_endpoint(query: str, context: str):
+    global mp_engine
+    assert mp_engine is not None
+
     result = await calculate_attention(query, context)
     return result
 
@@ -107,12 +119,19 @@ async def serve_http(app: FastAPI, **uvicorn_kwargs) -> None:
         return server.shutdown()
 
 async def run_server(args, **uvicorn_kwargs) -> None:
+    
+    engine_args = AsyncEngineArgs.from_cli_args(args)
+    engine_config = engine_args.create_engine_config()
+
+    global mp_engine
+    mp_engine = engine.create(engine_config=engine_config)
+
     app = await init_app(args)
 
     shutdown_task = await serve_http(
         app,
-        host=args.host,
-        port=args.port,
+        host=args.mp_host,
+        port=args.mp_port,
         **uvicorn_kwargs,
     )
 

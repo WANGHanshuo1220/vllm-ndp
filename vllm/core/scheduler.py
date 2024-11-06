@@ -843,6 +843,7 @@ class Scheduler:
 
             lora_int_id = 0
             if self.lora_enabled:
+                assert False
                 lora_int_id = seq_group.lora_int_id
                 assert curr_loras is not None
                 assert self.lora_config is not None
@@ -1072,6 +1073,7 @@ class Scheduler:
     def _schedule(self) -> SchedulerOutputs:
         """Schedule queued requests."""
         if self.scheduler_config.chunked_prefill_enabled:
+            assert(0)
             return self._schedule_chunked_prefill()
         else:
             return self._schedule_default()
@@ -1471,6 +1473,7 @@ class Scheduler:
         # If number of seq > 1, it means it is doing beam search
         # in a decode phase. Do not chunk.
         if enable_chunking and len(seqs) == 1:
+            assert False
             remaining_token_budget = budget.remaining_token_budget()
             if self.cache_config.enable_prefix_caching:
                 # When prefix caching is enabled, we always allocate

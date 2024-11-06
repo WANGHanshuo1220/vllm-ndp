@@ -111,6 +111,12 @@ class Attention(nn.Module):
             loop = asyncio.get_event_loop()
             loop.run_until_complete(
                 Attention._attn_pushdown.call())
+
+            # TODO:Here we need to invoke remote memory pool
+            # to compute attention. 
+            # [(q,k,v), (engine_id, req_id)] need to be transfered,
+            # [kv_cache, attn_metadata] is managed by remote pool
+
         return self.impl.forward(query,
                                  key,
                                  value,

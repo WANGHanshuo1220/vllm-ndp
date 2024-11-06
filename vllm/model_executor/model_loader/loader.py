@@ -356,7 +356,7 @@ class DefaultModelLoader(BaseModelLoader):
                    parallel_config: ParallelConfig,
                    scheduler_config: SchedulerConfig,
                    cache_config: CacheConfig,
-                   mem_pool_config: MemPoolConfig) -> nn.Module:
+                   mem_pool_config: Optional[MemPoolConfig] = None) -> nn.Module:
         target_device = torch.device(device_config.device)
         with set_default_torch_dtype(model_config.dtype):
             with target_device:

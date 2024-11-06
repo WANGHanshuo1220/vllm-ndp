@@ -36,9 +36,9 @@ class engine():
         # print(self.device_config)
         # print("==============")
 
-        self.attention_unit = self._create_attention()
-        self.cache_enigne = self._create_cache_engine()
-        self.block_manager = self._create_block_manager()
+        # self.attention_unit = self._create_attention()
+        # self.cache_enigne = self._create_cache_engine()
+        # self.block_manager = self._create_block_manager()
 
     def _create_attention(self) -> Attention:
         num_heads = self.model_config.get_num_attention_heads(

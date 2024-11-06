@@ -28,8 +28,7 @@ from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.mem_pool.util import add_arg_parser
 from vllm.mem_pool.engine import engine
 
-router1 = APIRouter() # for attention computation
-router2 = APIRouter() # for kv store
+router = APIRouter()
 _running_tasks: Set[asyncio.Task] = set()
 
 logger = init_logger('vllm.entrypoints.openai.api_server')
@@ -63,32 +62,15 @@ async def calculate_attention(query: str, context: str):
     attention_result = {"query": query, "context": context, "attention_score": 0.95}
     return attention_result
 
-""" Router 1 """
 
-@router1.get("/check_health")
+@router.get("/check_health")
 async def health() -> Response:
     """Health check."""
     print("check health")
     return Response(status_code=200)
 
 
-@router1.post("/compute_attention")
-async def calculate_attention_endpoint(query: str, context: str):
-    global mp_engine
-    assert mp_engine is not None
-
-    result = await calculate_attention(query, context)
-    return result
-
-""" Router 2 """
-
-@router2.get("/check_health")
-async def health() -> Response:
-    """Health check."""
-    print("check health")
-    return Response(status_code=200)
-
-@router2.post("/store_kv")
+@router.post("/store_kv")
 async def store_kv_cache_endpoint(key: str, value: str):
     global mp_engine
     assert mp_engine is not None
@@ -97,7 +79,16 @@ async def store_kv_cache_endpoint(key: str, value: str):
     return result
 
 
-async def init_app(args, router):
+@router.post("/compute_attention")
+async def calculate_attention_endpoint(query: str, context: str):
+    global mp_engine
+    assert mp_engine is not None
+
+    result = await calculate_attention(query, context)
+    return result
+
+
+async def init_app(args):
     app = FastAPI(lifespan=lifespan)
     app.include_router(router)
     app.root_path = args.root_path
@@ -135,15 +126,17 @@ async def run_server(args, **uvicorn_kwargs) -> None:
     global mp_engine
     mp_engine = engine.create(engine_config=engine_config)
 
-    app1 = await init_app(args, router1)
-    app2 = await init_app(args, router2)
+    app = await init_app(args)
 
-    shutdown_tasks = await asyncio.gather(
-        serve_http(app1, host=args.mp_host, port=args.mp_port),
-        serve_http(app2, host=args.mp_host, port=args.mp_port + 1)
+    shutdown_task = await serve_http(
+        app,
+        host=args.mp_host,
+        port=args.mp_port,
+        **uvicorn_kwargs,
     )
 
-    [await task for task in shutdown_tasks]
+    # NB: Await server shutdown only after the backend context is exited
+    await shutdown_task
 
 if __name__ == "__main__":
     parser = FlexibleArgumentParser(

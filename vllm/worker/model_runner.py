@@ -1500,7 +1500,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
     async def _store_prefilled_kv(
         self, 
-        kv_caches: List[torch.tensor], 
+        to_transfer_tensors: Dict[int, list[torch.tensor]], 
         block_tables: Dict[int, List[int]],
     ) -> None:
         # TODO: Create a session to transfer
@@ -1508,20 +1508,30 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
     def _store_prefilled_kv_helper(
         self, 
-        kv_caches: List[torch.tensor], 
+        kv_caches: List[torch.tensor], # List[2, nb, bs, nh, hs]
         block_tables: Dict[int, List[int]],
     ) -> None:
         # TODO: preprocessing to-transfer kv_cache
-        to_transfer_tensor = None
-        to_transfer_blocks = []
+        to_transfer_block_ids = []
         for blocks in block_tables.values():
-            to_transfer_blocks.extend(blocks)
+            to_transfer_block_ids.extend(blocks)
 
-        task = asyncio.create_task()
+        # block_id -> real_tensors
+        to_transfer_tensor = {}
+        for block_id in to_transfer_block_ids:
+            tensor_list = []
+            for layer in range(len(kv_caches)):
+                tensor = kv_caches[layer][:, block_id, :, :, :]
+                tensor_list.extend(tensor)
+            to_transfer_tensor[block_id] = tensor_list
 
-        # Register tasks
-        for key in block_tables.keys():
-            self.transfer_task_handlers[key] = task
+        # task = asyncio.create_task(self._store_prefilled_kv(
+        #     to_transfer_tensor, block_tables
+        # ))
+
+        # # Register tasks
+        # for key in block_tables.keys():
+        #     self.transfer_task_handlers[key] = task
 
     @torch.inference_mode()
     @dump_input_when_exception(exclude_args=[0], exclude_kwargs=["self"])
@@ -1577,11 +1587,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             model_forward_end = torch.cuda.Event(enable_timing=True)
             model_forward_start.record()
 
-        if model_input.seq_group_metadata_list:
-            for item in model_input.seq_group_metadata_list:
-                print(item.block_tables)
-            print("===========================")
-
         hidden_or_intermediate_states = model_executable(
             input_ids=model_input.input_tokens,
             positions=model_input.input_positions,
@@ -1594,8 +1599,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
         # TODO:Here if this request is prefill, the generated blocks should 
         # be stored remotely. [(engine_id, req_id): kv] should be transfered
-        if self.mem_pool_config is not None and \
-            model_input.attn_metadata.num_prefills > 0:
+        if (self.mem_pool_config is not None 
+            and model_input.attn_metadata.num_prefills > 0 
+            and model_input.seq_group_metadata_list is not None
+        ):
             block_tables = {}
             for seq in model_input.seq_group_metadata_list:
                 block_tables.update(seq.block_tables)

@@ -268,6 +268,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                 model_input,
                 async_callback=execute_model_req.async_callback)
 
+        assert (execute_model_req.seq_group_metadata_list is not None)
         model_input = dataclasses.replace(  # type: ignore
             model_input,
             seq_group_metadata_list=execute_model_req.seq_group_metadata_list)

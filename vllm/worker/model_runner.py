@@ -55,6 +55,8 @@ from vllm.worker.model_runner_base import (
     _init_attn_metadata_from_tensor_dict,
     _init_sampling_metadata_from_tensor_dict, dump_input_when_exception)
 
+import asyncio
+
 if TYPE_CHECKING:
     from vllm.attention.backends.abstract import AttentionBackend
 
@@ -994,6 +996,9 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.inter_data_cache: Dict[int, PyObjectCache] = {}
         self.sampling_metadata_cache: SamplingMetadataCache = \
             SamplingMetadataCache()
+        
+        # Create a list to contain transfer task handler 
+        self.transfer_task_handlers = []
 
     def load_model(self) -> None:
         logger.info("Starting to load model %s...", self.model_config.model)
@@ -1493,6 +1498,27 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                                    is_prompt=is_prompt,
                                    virtual_engine=virtual_engine)
 
+    async def _store_prefilled_kv(
+        self, 
+        kv_caches: List[torch.tensor], 
+        block_tables: Dict[int, List[int]],
+    ) -> None:
+        # TODO: Create a session to transfer
+        pass
+
+    def _store_prefilled_kv_helper(
+        self, 
+        kv_caches: List[torch.tensor], 
+        block_tables: Dict[int, List[int]],
+    ) -> None:
+        # TODO: preprocessing to-transfer kv_cache
+        to_transfer_tensor = None
+        task = asyncio.create_task()
+
+        # Register tasks
+        for key in block_tables.keys():
+            self.transfer_task_handlers[key] = task
+
     @torch.inference_mode()
     @dump_input_when_exception(exclude_args=[0], exclude_kwargs=["self"])
     def execute_model(
@@ -1527,13 +1553,14 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # TODO(andoorve): We can remove this once all
         # virtual engines share the same kv cache.
         virtual_engine = model_input.virtual_engine
-        if prefill_meta is None and decode_meta.use_cuda_graph:
-            assert model_input.input_tokens is not None
-            graph_batch_size = model_input.input_tokens.shape[0]
-            model_executable = self.graph_runners[virtual_engine][
-                graph_batch_size]
-        else:
-            model_executable = self.model
+        # if prefill_meta is None and decode_meta.use_cuda_graph:
+        #     assert model_input.input_tokens is not None
+        #     graph_batch_size = model_input.input_tokens.shape[0]
+        #     model_executable = self.graph_runners[virtual_engine][
+        #         graph_batch_size]
+        # else:
+        #     model_executable = self.model
+        model_executable = self.model
 
         multi_modal_kwargs = model_input.multi_modal_kwargs or {}
         seqlen_agnostic_kwargs = {
@@ -1546,11 +1573,11 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             model_forward_end = torch.cuda.Event(enable_timing=True)
             model_forward_start.record()
 
-        print(f"model_input.input_tokens = {model_input.input_tokens}")
-        print(f"model_input.input_positions = {model_input.input_positions}")
-        print(f"model_input.num_prefill = {model_input.attn_metadata.num_prefills}")
-        print(f"model_input.attn_metadata = {model_input.attn_metadata.block_tables}")
-        print("===========================")
+        if model_input.seq_group_metadata_list:
+            for item in model_input.seq_group_metadata_list:
+                print(item.block_tables)
+            print("===========================")
+
         hidden_or_intermediate_states = model_executable(
             input_ids=model_input.input_tokens,
             positions=model_input.input_positions,
@@ -1563,8 +1590,13 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
         # TODO:Here if this request is prefill, the generated blocks should 
         # be stored remotely. [(engine_id, req_id): kv] should be transfered
+        if self.mem_pool_config is not None and \
+            model_input.attn_metadata.num_prefills > 0:
+            block_tables = {}
+            for seq in model_input.seq_group_metadata_list:
+                block_tables.update(seq.block_tables)
+            self._store_prefilled_kv_helper(kv_caches, block_tables)
         
-
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):
             model_forward_end.record()

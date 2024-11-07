@@ -117,6 +117,7 @@ class Attention(nn.Module):
             # [(q,k,v), (engine_id, req_id)] need to be transfered,
             # [kv_cache, attn_metadata] is managed by remote pool
 
+        print(query.shape, key.shape, value.shape)
         return self.impl.forward(query,
                                  key,
                                  value,

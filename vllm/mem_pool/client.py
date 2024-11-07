@@ -26,6 +26,10 @@ class Attention_pushdown():
         self.session_running = False
         self.base_url = f"http://{self.host}:{self.port}"
         logger.info(f"mp url = {self.base_url}")
+    
+    def __del__(self):
+        self.close_session()
+        logger.info(f"session is closed gracefully")
 
     def init_session(self):
         global session

@@ -12,6 +12,8 @@ from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.platforms import current_platform
 from vllm.sequence import IntermediateTensors, SequenceGroupMetadata
 
+from aiohttp import ClientSession
+
 if TYPE_CHECKING:
     from vllm.attention import AttentionMetadata
     from vllm.attention.backends.abstract import AttentionBackend
@@ -230,6 +232,7 @@ class ModelRunnerBase(ABC, Generic[T]):
         kv_caches: Optional[List[torch.Tensor]],
         intermediate_tensors: Optional[IntermediateTensors],
         num_steps: int = 1,
+        session: Optional[ClientSession] = None,
     ) -> Optional[List[SamplerOutput]]:
         """
         Execute the model on the given input.

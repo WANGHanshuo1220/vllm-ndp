@@ -998,7 +998,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
             SamplingMetadataCache()
         
         # Create a list to contain transfer task handler 
-        self.transfer_task_handlers = []
+        self.transfer_task_handlers = {}
 
     def load_model(self) -> None:
         logger.info("Starting to load model %s...", self.model_config.model)
@@ -1513,6 +1513,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
     ) -> None:
         # TODO: preprocessing to-transfer kv_cache
         to_transfer_tensor = None
+        to_transfer_blocks = None
+        for blocks in block_tables.values():
+            pass
+
         task = asyncio.create_task()
 
         # Register tasks

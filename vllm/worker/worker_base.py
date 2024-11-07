@@ -303,6 +303,8 @@ class LocalOrDistributedWorkerBase(WorkerBase):
     ) -> Optional[List[SamplerOutput]]:
         """Executes at least one model step on the given sequences, unless no
         sequences are provided."""
+        # import asyncio
+        # print(f"woker_base: execute_model loop {asyncio.get_event_loop()}")
         start_time = time.perf_counter()
 
         inputs = self.prepare_input(execute_model_req)

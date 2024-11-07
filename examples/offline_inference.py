@@ -10,6 +10,9 @@ prompts = [
 # Create a sampling params object.
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
 
+import asyncio
+print(asyncio.get_event_loop())
+
 # Create an LLM.
 llm = LLM(model="/root/models/opt-125m",
           mp_enable=True, mp_host="localhost", mp_port="9999")

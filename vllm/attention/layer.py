@@ -92,10 +92,16 @@ class Attention(nn.Module):
                              alibi_slopes, sliding_window, kv_cache_dtype,
                              blocksparse_params, logits_soft_cap)
 
+        self.attn_event_loop = None
+        if (mem_pool_config is not None):
+            self.attn_event_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.attn_event_loop)
+
         # Create attention pushdown session
         if (mem_pool_config is not None and \
             Attention._attn_pushdown is None):
-            Attention._attn_pushdown = Attention_pushdown(mem_pool_config)
+            Attention._attn_pushdown = Attention_pushdown(
+                mem_pool_config,)
 
     def forward(
         self,
@@ -108,9 +114,10 @@ class Attention(nn.Module):
     ) -> torch.Tensor:
 
         if Attention._attn_pushdown is not None:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(
-                Attention._attn_pushdown.call())
+            task = self.attn_event_loop.create_task(
+                Attention._attn_pushdown.call()
+            )
+            self.attn_event_loop.run_until_complete(task)
 
             # TODO:Here we need to invoke remote memory pool
             # to compute attention. 

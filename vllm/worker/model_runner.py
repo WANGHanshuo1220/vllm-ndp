@@ -1513,9 +1513,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
     ) -> None:
         # TODO: preprocessing to-transfer kv_cache
         to_transfer_tensor = None
-        to_transfer_blocks = None
+        to_transfer_blocks = []
         for blocks in block_tables.values():
-            pass
+            to_transfer_blocks.extend(blocks)
 
         task = asyncio.create_task()
 

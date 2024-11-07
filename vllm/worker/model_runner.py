@@ -7,7 +7,7 @@ import warnings
 import weakref
 from dataclasses import dataclass
 from typing import (TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set,
-                    Tuple, Type, TypeVar, Union)
+                    Tuple, Type, TypeVar, Union, TypeAlias)
 
 import numpy as np
 import torch
@@ -57,6 +57,7 @@ from vllm.worker.model_runner_base import (
 
 import asyncio
 from vllm.mem_pool.connector import Remote_connector
+KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 
 if TYPE_CHECKING:
     from vllm.attention.backends.abstract import AttentionBackend
@@ -1505,12 +1506,11 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
     async def _store_prefilled_kv(
         self, 
         seq_id: int,
-        to_transfer_tensors: Dict[int, list[torch.tensor]], # b_id -> tensor
+        to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]], # b_id -> tensor
     ) -> None:
         # TODO: Create a session to transfer
         print(f"==========transfering {seq_id}'s kv cache==========")
-        # await self.connector.dummy_call()
-        await asyncio.sleep(1)
+        await self.connector.store_kv(seq_id, to_transfer_tensor_list)
         self.transfer_task_handlers.pop(seq_id)
         self.finished_transfer[seq_id] = True
 
@@ -1521,18 +1521,19 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
     ) -> None:
         # NOTE: preprocessing to-transfer kv_cache
         for seq_id, block_ids in block_tables.items():
-            to_transfer_tensor = {}
+            to_transfer_tensor_list = {}
             for block_id in block_ids:
-                block_tensor = []
-                for layer in range(len(kv_caches)):
+                block_tensor_list = []
+                # for layer in range(len(kv_caches)):
+                for layer in range(2):
                     block_layer_tensor = kv_caches[layer][:, block_id, :, :, :]
-                    block_tensor.append(block_layer_tensor)
-                to_transfer_tensor[block_id] = block_tensor
+                    block_tensor_list.append(block_layer_tensor.tolist())
+                to_transfer_tensor_list[block_id] = block_tensor_list
             
             # Register tasks
             task = self.store_kv_event_loop.create_task(
                 self._store_prefilled_kv(
-                    seq_id, to_transfer_tensor,
+                    seq_id, to_transfer_tensor_list,
             ))
             self.transfer_task_handlers[seq_id] = task
 

@@ -32,7 +32,7 @@ python3 benchmarks/benchmark_serving.py \
     --dataset-name sharegpt \
     --dataset-path ${DATA_PATH} \
     --model ${MODEL_PATH} \
-    --num-prompts 5 \
+    --num-prompts 1 \
     --endpoint /v1/completions \
     --tokenizer ${MODEL_PATH} \
     --save-result \

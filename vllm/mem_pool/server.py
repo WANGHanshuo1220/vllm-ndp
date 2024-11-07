@@ -1,39 +1,35 @@
 import asyncio
-import importlib
-import inspect
-import multiprocessing
-import os
-import re
-import tempfile
-from argparse import Namespace
 from contextlib import asynccontextmanager
-from http import HTTPStatus
-from typing import AsyncIterator, Optional, Set
+from typing import Set, List
 import uvicorn
 import signal
 
-from fastapi import APIRouter, FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, StreamingResponse
-from starlette.routing import Mount
+from fastapi import APIRouter, FastAPI
+from fastapi.responses import Response
+from pydantic import BaseModel
 from typing_extensions import assert_never
 from vllm.entrypoints.launcher import serve_http
 from vllm.logger import init_logger
 from vllm.utils import FlexibleArgumentParser
+from typing import Dict, List, TypeAlias
 
-from vllm.config import EngineConfig
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.mem_pool.util import add_arg_parser
 from vllm.mem_pool.engine import engine
+import torch
 
 router = APIRouter()
 _running_tasks: Set[asyncio.Task] = set()
 
 logger = init_logger('vllm.entrypoints.openai.api_server')
 
+KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 mp_engine: engine = None
+
+class StoreKVRequest(BaseModel):
+    seq_id: int
+    tensor_data: Dict[int, List[KVCAHE_DIMENSION]]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,11 +44,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
-async def store_kv_cache(key: str, value: str):
+async def store_kv_cache():
     # Here we simulate storing a key-value pair, such as in a cache or database
-    logger.info(f"Storing KV pair: {key} -> {value}")
     # Add the actual storage logic here
-    return {"status": "success", "key": key, "value": value}
+
+    return {"status": "success"}
 
 
 async def calculate_attention(query: str, context: str):
@@ -71,11 +67,10 @@ async def health() -> Response:
 
 
 @router.post("/store_kv")
-async def store_kv_cache_endpoint(key: str, value: str):
-    global mp_engine
-    assert mp_engine is not None
+async def store_kv_cache_endpoint(request: StoreKVRequest):
+    print(f"recieve kv cache of {request.seq_id}")
 
-    result = await store_kv_cache(key, value)
+    result = await store_kv_cache()
     return result
 
 

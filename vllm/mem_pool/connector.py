@@ -12,6 +12,8 @@ from pydantic import BaseModel
 logger = init_logger(__name__)
 
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
+
+# [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 
 class StoreKVRequest(BaseModel):

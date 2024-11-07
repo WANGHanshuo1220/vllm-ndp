@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Set, List
+from typing import Set, List, DefaultDict
 import uvicorn
 import signal
 
@@ -22,8 +22,9 @@ import torch
 router = APIRouter()
 _running_tasks: Set[asyncio.Task] = set()
 
-logger = init_logger('vllm.entrypoints.openai.api_server')
+logger = init_logger('Mempry Pool Server')
 
+# [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 mp_engine: engine = None
 
@@ -44,7 +45,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-async def store_kv_cache():
+async def store_kv_cache(seq_id: int, blocks_to_tensor: Dict[int, torch.tensor]):
     # Here we simulate storing a key-value pair, such as in a cache or database
     # Add the actual storage logic here
 
@@ -68,9 +69,17 @@ async def health() -> Response:
 
 @router.post("/store_kv")
 async def store_kv_cache_endpoint(request: StoreKVRequest):
-    print(f"recieve kv cache of {request.seq_id}")
+    logger.info(f"recieve kv cache of {request.seq_id}")
+    # NOTE: Restore original tensor
+    blocks_to_tensor = {}
+    for block_id, tensor_list in request.tensor_data.items():
+        block_to_tensor = []
+        for layer_tensor_list in tensor_list:
+            org_layer_tensor = torch.tensor(layer_tensor_list)
+            block_to_tensor.append(org_layer_tensor)
+        blocks_to_tensor[block_id] = block_to_tensor
 
-    result = await store_kv_cache()
+    result = await store_kv_cache(request.seq_id, blocks_to_tensor)
     return result
 
 

@@ -57,6 +57,8 @@ from vllm.worker.model_runner_base import (
 
 import asyncio
 from vllm.mem_pool.connector import Remote_connector
+
+# [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 
 if TYPE_CHECKING:

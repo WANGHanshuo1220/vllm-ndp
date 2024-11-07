@@ -11,7 +11,7 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 from vllm.model_executor.layers.quantization.kv_cache import BaseKVCacheMethod
 
-from vllm.mem_pool.client import Attention_pushdown
+from vllm.mem_pool.connector import Remote_connector
 import asyncio
 
 
@@ -27,7 +27,7 @@ class Attention(nn.Module):
     3. Return the output tensor.
     """
 
-    _attn_pushdown = None
+    _connector = None
 
     def __init__(
         self,
@@ -99,9 +99,8 @@ class Attention(nn.Module):
 
         # Create attention pushdown session
         if (mem_pool_config is not None and \
-            Attention._attn_pushdown is None):
-            Attention._attn_pushdown = Attention_pushdown(
-                mem_pool_config,)
+            Attention._connector is None):
+            Attention._connector = Remote_connector(mem_pool_config)
 
     def forward(
         self,
@@ -113,16 +112,17 @@ class Attention(nn.Module):
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
 
-        if Attention._attn_pushdown is not None:
-            task = self.attn_event_loop.create_task(
-                Attention._attn_pushdown.call()
-            )
-            self.attn_event_loop.run_until_complete(task)
+        if Attention._connector is not None:
 
             # TODO:Here we need to invoke remote memory pool
             # to compute attention. 
             # [(q,k,v), (engine_id, req_id)] need to be transfered,
             # [kv_cache, attn_metadata] is managed by remote pool
+
+            task = self.attn_event_loop.create_task(
+                Attention._connector.dummy_call()
+            )
+            self.attn_event_loop.run_until_complete(task)
 
         return self.impl.forward(query,
                                  key,

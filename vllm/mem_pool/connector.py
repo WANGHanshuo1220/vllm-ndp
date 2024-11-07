@@ -15,12 +15,11 @@ class PushdownResponse:
     hidden_states: torch.tensor
     success: bool
 
-class Attention_pushdown():
+class Remote_connector():
 
     def __init__(self, config: MemPoolConfig) -> None:
         self.host = config.host
         self.port = config.port
-        self.session_running = False
         self.base_url = f"http://{self.host}:{self.port}"
     
     async def compute_attention(self, q, k, v) -> PushdownResponse:
@@ -69,9 +68,7 @@ class Attention_pushdown():
             self.init_session()
             logger.warning(f"restarting session complete")
     
-    async def call(self):
-        # Check if session is on
-
+    async def dummy_call(self):
         async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:
             try:
                 url = self.base_url + "/check_health"

@@ -56,6 +56,7 @@ from vllm.worker.model_runner_base import (
     _init_sampling_metadata_from_tensor_dict, dump_input_when_exception)
 
 import asyncio
+from vllm.mem_pool.connector import Remote_connector
 
 if TYPE_CHECKING:
     from vllm.attention.backends.abstract import AttentionBackend
@@ -1000,11 +1001,8 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         # Create a list to contain transfer task handler 
         self.transfer_task_handlers = {}
         self.finished_transfer = {}
-        self.store_kv_event_loop = None
-        try:
-            self.store_kv_event_loop = asyncio.get_event_loop()
-        except RuntimeError:
-            self.store_kv_event_loop = asyncio.new_event_loop()
+        self.store_kv_event_loop = asyncio.new_event_loop()
+        self.connector = Remote_connector(self.mem_pool_config)
 
     def load_model(self) -> None:
         logger.info("Starting to load model %s...", self.model_config.model)
@@ -1511,7 +1509,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
     ) -> None:
         # TODO: Create a session to transfer
         print(f"==========transfering {seq_id}'s kv cache==========")
-        await asyncio.sleep(0.1)
+        # await self.connector.dummy_call()
+        await asyncio.sleep(1)
         self.transfer_task_handlers.pop(seq_id)
         self.finished_transfer[seq_id] = True
 

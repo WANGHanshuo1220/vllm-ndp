@@ -18,6 +18,7 @@ KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 
 class StoreKVRequest(BaseModel):
     seq_id: int
+    token_ids: List[int]
     tensor_data: Dict[int, List[KVCAHE_DIMENSION]]
 
 class Remote_connector():
@@ -53,6 +54,7 @@ class Remote_connector():
     async def store_kv(
         self, 
         seq_id: int, 
+        token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]]
     ) -> None:
         async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:
@@ -60,6 +62,7 @@ class Remote_connector():
                 url = self.base_url + "/store_kv"
                 payload = {
                     "seq_id": seq_id,
+                    "token_ids": token_ids,
                     "tensor_data": to_transfer_tensor_list
                 }
                 async with session.post(url=url, json=payload) as response:

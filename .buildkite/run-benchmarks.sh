@@ -22,6 +22,7 @@ DATA_PATH="/root/lmcache/ShareGPT_V3_unfiltered_cleaned_split.json"
 python3 -m vllm.entrypoints.openai.api_server \
     --model ${MODEL_PATH} \
     --mp-enable --mp_host "localhost" --mp_port "9999" &
+    # --mp-enable --mp_host "10.210.22.242" --mp_port "30179" &
 server_pid=$!
 # wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 

@@ -30,6 +30,7 @@ mp_engine: engine = None
 
 class StoreKVRequest(BaseModel):
     seq_id: int
+    token_ids: List[int]
     tensor_data: Dict[int, List[KVCAHE_DIMENSION]]
 
 @asynccontextmanager
@@ -45,7 +46,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-async def store_kv_cache(seq_id: int, blocks_to_tensor: Dict[int, torch.tensor]):
+async def store_kv_cache(seq_id: int, 
+                         token_ids: List[int],
+                         blocks_to_tensor: Dict[int, torch.tensor]):
+    print(seq_id, token_ids)
     # Here we simulate storing a key-value pair, such as in a cache or database
     # Add the actual storage logic here
 
@@ -79,7 +83,9 @@ async def store_kv_cache_endpoint(request: StoreKVRequest):
             block_to_tensor.append(org_layer_tensor)
         blocks_to_tensor[block_id] = block_to_tensor
 
-    result = await store_kv_cache(request.seq_id, blocks_to_tensor)
+    result = await store_kv_cache(request.seq_id, 
+                                  request.token_ids,
+                                  blocks_to_tensor)
     return result
 
 

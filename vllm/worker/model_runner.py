@@ -1508,26 +1508,36 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
     async def _store_prefilled_kv(
         self, 
         seq_id: int,
+        token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]], # b_id -> tensor
     ) -> None:
         # TODO: Create a session to transfer
         print(f"==========transfering {seq_id}'s kv cache==========")
-        await self.connector.store_kv(seq_id, to_transfer_tensor_list)
+        await self.connector.store_kv(seq_id, token_ids, to_transfer_tensor_list)
         self.transfer_task_handlers.pop(seq_id)
         self.finished_transfer[seq_id] = True
 
     def _store_prefilled_kv_helper(
         self, 
         kv_caches: List[torch.tensor], # List[2, nb, bs, nh, hs]
-        block_tables: Dict[int, List[int]], # seq_id -> block_ids
+        seq_group_metadata_list: List[SequenceGroupMetadata]
     ) -> None:
-        # NOTE: preprocessing to-transfer kv_cache
+        block_tables = {} # Dict[seq_id, List(block_ids)]
+        seq_id_to_tokens = {} #  Dict[seq_id, List(token_ids)]
+
+        # Get seq_id -> Token_ids
+        for sg_metadata in seq_group_metadata_list:
+            assert len(sg_metadata.seq_data) == 1
+            for seq_id, seq_data in sg_metadata.seq_data.items():
+                seq_id_to_tokens[seq_id] = list(seq_data.get_prompt_token_ids())
+            block_tables.update(sg_metadata.block_tables)
+
+        # Get seq_id -> block_ids
         for seq_id, block_ids in block_tables.items():
             to_transfer_tensor_list = {}
             for block_id in block_ids:
                 block_tensor_list = []
-                # for layer in range(len(kv_caches)):
-                for layer in range(2):
+                for layer in range(len(kv_caches)):
                     block_layer_tensor = kv_caches[layer][:, block_id, :, :, :]
                     block_tensor_list.append(block_layer_tensor.tolist())
                 to_transfer_tensor_list[block_id] = block_tensor_list
@@ -1535,7 +1545,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             # Register tasks
             task = self.store_kv_event_loop.create_task(
                 self._store_prefilled_kv(
-                    seq_id, to_transfer_tensor_list,
+                    seq_id, seq_id_to_tokens[seq_id], to_transfer_tensor_list,
             ))
             self.transfer_task_handlers[seq_id] = task
 
@@ -1624,10 +1634,14 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             and model_input.attn_metadata.num_prefills > 0 
             and model_input.seq_group_metadata_list is not None
         ):
-            block_tables = {}
-            for sg_metadata in model_input.seq_group_metadata_list:
-                block_tables.update(sg_metadata.block_tables)
-            self._store_prefilled_kv_helper(kv_caches, block_tables)
+            # block_tables = {}
+            # for sg_metadata in model_input.seq_group_metadata_list:
+            #     assert len(sg_metadata.seq_data) == 1
+            #     for seq_id, seq_data in sg_metadata.seq_data.items():
+            #         print(seq_id, seq_data.get_prompt_token_ids())
+            #     block_tables.update(sg_metadata.block_tables)
+            self._store_prefilled_kv_helper(kv_caches, 
+                                            model_input.seq_group_metadata_list)
         
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):

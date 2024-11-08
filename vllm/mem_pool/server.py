@@ -22,7 +22,7 @@ import torch
 router = APIRouter()
 _running_tasks: Set[asyncio.Task] = set()
 
-logger = init_logger('Mempry Pool Server')
+logger = init_logger('Memory Pool Server')
 
 # [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]

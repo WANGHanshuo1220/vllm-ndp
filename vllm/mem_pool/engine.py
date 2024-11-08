@@ -3,6 +3,7 @@ import psutil
 from vllm.attention.layer import Attention
 from vllm.core.block_manager_v2 import BlockSpaceManagerV2
 from vllm.worker.cpu_worker import CPUCacheEngine, CPUWorker
+from vllm.logger import init_logger
 
 from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          ModelConfig, ObservabilityConfig, ParallelConfig,
@@ -10,6 +11,8 @@ from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          SpeculativeConfig, MemPoolConfig, EngineConfig)
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
+
+logger = init_logger('Server execute engine')
 
 class engine():
 
@@ -36,9 +39,9 @@ class engine():
         # print(self.device_config)
         # print("==============")
 
-        # self.attention_unit = self._create_attention()
-        # self.cache_enigne = self._create_cache_engine()
-        # self.block_manager = self._create_block_manager()
+        self.attention_unit = self._create_attention()
+        self.cache_enigne = self._create_cache_engine()
+        self.block_manager = self._create_block_manager()
 
     def _create_attention(self) -> Attention:
         num_heads = self.model_config.get_num_attention_heads(

@@ -57,6 +57,7 @@ from vllm.worker.model_runner_base import (
 
 import asyncio
 from vllm.mem_pool.connector import Remote_connector
+from vllm.utils import make_async
 
 # [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
@@ -1004,8 +1005,12 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         # Create a list to contain transfer task handler 
         self.transfer_task_handlers = {}
         self.finished_transfer = {}
-        self.store_kv_event_loop = asyncio.new_event_loop()
-        self.connector = Remote_connector(self.mem_pool_config)
+        self.store_kv_event_loop = None
+        self.connector = None
+        self.kv_transfer_time: dict[int, ] = {}
+        if self.mem_pool_config is not None:
+            self.store_kv_event_loop = asyncio.get_event_loop()
+            self.connector = Remote_connector(self.mem_pool_config)
 
     def load_model(self) -> None:
         logger.info("Starting to load model %s...", self.model_config.model)
@@ -1505,17 +1510,17 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                                    is_prompt=is_prompt,
                                    virtual_engine=virtual_engine)
 
-    async def _store_prefilled_kv(
+    def _store_prefilled_kv(
         self, 
         seq_id: int,
         token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]], # b_id -> tensor
     ) -> None:
-        # TODO: Create a session to transfer
-        print(f"==========transfering {seq_id}'s kv cache==========")
-        await self.connector.store_kv(seq_id, token_ids, to_transfer_tensor_list)
+        self.kv_transfer_time[seq_id] = time.time()
+        self.connector.store_kv(seq_id, token_ids, to_transfer_tensor_list)
         self.transfer_task_handlers.pop(seq_id)
         self.finished_transfer[seq_id] = True
+        print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")
 
     def _store_prefilled_kv_helper(
         self, 
@@ -1542,11 +1547,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     block_tensor_list.append(block_layer_tensor.tolist())
                 to_transfer_tensor_list[block_id] = block_tensor_list
             
-            # Register tasks
-            task = self.store_kv_event_loop.create_task(
-                self._store_prefilled_kv(
-                    seq_id, seq_id_to_tokens[seq_id], to_transfer_tensor_list,
-            ))
+            task = make_async(self._store_prefilled_kv, self.store_kv_event_loop)(
+                seq_id, seq_id_to_tokens[seq_id], to_transfer_tensor_list,
+            )
             self.transfer_task_handlers[seq_id] = task
 
     @torch.inference_mode()
@@ -1610,13 +1613,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             for sg_metadata in model_input.seq_group_metadata_list:
                 for seq_id in sg_metadata.block_tables.keys():
                     if seq_id in self.transfer_task_handlers:
-                        print(f"********wait {seq_id}'s transfer to finish*******")
                         self.store_kv_event_loop.run_until_complete(
-                            self.transfer_task_handlers[seq_id])
-                    elif seq_id in self.finished_transfer:
-                        print(f"********{seq_id}'s transfer already finished*******")
-                        self.finished_transfer.pop(seq_id)
-
+                            self.transfer_task_handlers[seq_id]
+                        )
 
         hidden_or_intermediate_states = model_executable(
             input_ids=model_input.input_tokens,
@@ -1634,12 +1633,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             and model_input.attn_metadata.num_prefills > 0 
             and model_input.seq_group_metadata_list is not None
         ):
-            # block_tables = {}
-            # for sg_metadata in model_input.seq_group_metadata_list:
-            #     assert len(sg_metadata.seq_data) == 1
-            #     for seq_id, seq_data in sg_metadata.seq_data.items():
-            #         print(seq_id, seq_data.get_prompt_token_ids())
-            #     block_tables.update(sg_metadata.block_tables)
             self._store_prefilled_kv_helper(kv_caches, 
                                             model_input.seq_group_metadata_list)
         

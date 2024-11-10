@@ -94,8 +94,7 @@ class Attention(nn.Module):
 
         self.attn_event_loop = None
         if (mem_pool_config is not None):
-            self.attn_event_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.attn_event_loop)
+            self.attn_event_loop = asyncio.get_event_loop()
 
         # Create attention pushdown session
         if (mem_pool_config is not None and \
@@ -119,11 +118,11 @@ class Attention(nn.Module):
             # [(q,k,v), (engine_id, req_id)] need to be transfered,
             # [kv_cache, attn_metadata] is managed by remote pool
 
+            assert self.attn_event_loop is not None
             # task = self.attn_event_loop.create_task(
             #     Attention._connector.dummy_call()
             # )
             # self.attn_event_loop.run_until_complete(task)
-            pass
 
         return self.impl.forward(query,
                                  key,

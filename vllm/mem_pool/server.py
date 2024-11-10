@@ -15,8 +15,7 @@ from typing import Dict, List, TypeAlias
 
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.entrypoints.openai.cli_args import make_arg_parser
-from vllm.mem_pool.util import add_arg_parser
-from vllm.mem_pool.engine import engine
+from vllm.mem_pool.engine import Memory_pool_engine
 import torch
 
 router = APIRouter()
@@ -26,7 +25,7 @@ logger = init_logger('Memory Pool Server')
 
 # [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
-mp_engine: engine = None
+engine: Memory_pool_engine = None
 
 class StoreKVRequest(BaseModel):
     seq_id: int
@@ -48,10 +47,12 @@ async def lifespan(app: FastAPI):
 
 async def store_kv_cache(seq_id: int, 
                          token_ids: List[int],
-                         blocks_to_tensor: Dict[int, torch.tensor]):
-    print(seq_id, token_ids)
+                         blocks_to_tensor: Dict[int, List[torch.tensor]]):
     # Here we simulate storing a key-value pair, such as in a cache or database
     # Add the actual storage logic here
+    global engine
+    await engine.add_kv_transfer_request(seq_id, token_ids, 
+                                            blocks_to_tensor)
 
     return {"status": "success"}
 
@@ -91,19 +92,17 @@ async def store_kv_cache_endpoint(request: StoreKVRequest):
 
 @router.post("/compute_attention")
 async def calculate_attention_endpoint(query: str, context: str):
-    global mp_engine
-    assert mp_engine is not None
+    global engine
+    assert engine is not None
 
     result = await calculate_attention(query, context)
     return result
-
 
 async def init_app(args):
     app = FastAPI(lifespan=lifespan)
     app.include_router(router)
     app.root_path = args.root_path
     return app
-
 
 async def serve_http(app: FastAPI, **uvicorn_kwargs) -> None:
     config = uvicorn.Config(app, **uvicorn_kwargs)
@@ -133,8 +132,8 @@ async def run_server(args, **uvicorn_kwargs) -> None:
     engine_args = AsyncEngineArgs.from_cli_args(args)
     engine_config = engine_args.create_engine_config()
 
-    global mp_engine
-    mp_engine = engine.create(engine_config=engine_config)
+    global engine
+    engine = Memory_pool_engine.create(engine_config=engine_config)
 
     app = await init_app(args)
 

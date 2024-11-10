@@ -398,7 +398,9 @@ def in_wsl() -> bool:
     return "microsoft" in " ".join(uname()).lower()
 
 
-def make_async(func: Callable[P, T]) -> Callable[P, Awaitable[T]]:
+def make_async(func: Callable[P, T], 
+               eloop: Optional[asyncio.AbstractEventLoop] = None
+)-> Callable[P, Awaitable[T]]:
     """Take a blocking function, and run it on in an executor thread.
 
     This function prevents the blocking function from blocking the
@@ -407,7 +409,10 @@ def make_async(func: Callable[P, T]) -> Callable[P, Awaitable[T]]:
     """
 
     def _async_wrapper(*args: P.args, **kwargs: P.kwargs) -> asyncio.Future:
-        loop = asyncio.get_event_loop()
+        if eloop is not None:
+            loop = eloop
+        else:
+            loop = asyncio.get_event_loop()
         p_func = partial(func, *args, **kwargs)
         return loop.run_in_executor(executor=None, func=p_func)
 

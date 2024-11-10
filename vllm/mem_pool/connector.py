@@ -8,6 +8,8 @@ from vllm.logger import init_logger
 from vllm.config import MemPoolConfig
 import asyncio
 from pydantic import BaseModel
+import time
+import requests
 
 logger = init_logger(__name__)
 
@@ -27,6 +29,7 @@ class Remote_connector():
         self.host = config.host
         self.port = config.port
         self.base_url = f"http://{self.host}:{self.port}"
+        self.session = requests.Session()
     
     async def compute_attention(self, q, k, v) -> None:
         # Check session is on
@@ -51,25 +54,24 @@ class Remote_connector():
             self.init_session()
             logger.warning(f"restarting session complete")
     
-    async def store_kv(
+    def store_kv(
         self, 
         seq_id: int, 
         token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]]
     ) -> None:
-        async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:
-            try:
-                url = self.base_url + "/store_kv"
-                payload = {
-                    "seq_id": seq_id,
-                    "token_ids": token_ids,
-                    "tensor_data": to_transfer_tensor_list
-                }
-                async with session.post(url=url, json=payload) as response:
-                    if response.status == 200:
-                        pass
-            except Exception as e:
-                print(f"Error: {e}")
+        url = self.base_url + "/store_kv"
+        payload = {
+            "seq_id": seq_id,
+            "token_ids": token_ids,
+            "tensor_data": to_transfer_tensor_list
+        }
+        try:
+            response = self.session.post(url, json=payload, timeout=60)
+            if response.status_code == 200:
+                pass
+        except Exception as e:
+            print(f"Error: {e}")
     
     async def dummy_call(self):
         async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:

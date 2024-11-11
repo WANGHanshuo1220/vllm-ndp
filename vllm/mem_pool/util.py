@@ -2,8 +2,10 @@ from typing import List, Dict, Tuple, Set, TypeAlias
 import queue
 import torch
 import asyncio
-import logging
+from vllm.utils import init_logger
 from pydantic import BaseModel
+
+logger = init_logger(__name__)
 
 # [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
@@ -38,6 +40,7 @@ class KVRequestTracker:
         loop iteration."""
         self.all_recieved_requests.append(seq_id)
         self._new_requests.put(content)
+        logger.info(f"recieve seq {seq_id}, queue len = {self._new_requests.qsize()}")
 
     def get_new_requests(self) -> List[KVTransferData]:
         """Get the new requests and finished requests to be
@@ -45,7 +48,7 @@ class KVRequestTracker:
         new_requests = []
 
         while (not self._new_requests.empty()
-               and len(new_request) is not self.max_workers):
+               and len(new_requests) is not self.max_workers):
             new_request = self._new_requests.get()
             new_requests.append(new_request)
 

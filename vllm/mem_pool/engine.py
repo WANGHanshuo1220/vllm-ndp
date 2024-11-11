@@ -196,8 +196,12 @@ class Memory_pool_engine():
         data = KVTransferData(seq_id, token_ids, blocks_to_tensor)
         self.kv_transfer_request_tracker.add_request(seq_id, data)
 
-    def store_kv(self, seq_id: int, token_ids: List[int],
-                       blocks_to_tensor: Dict[int, torch.tensor]):
+    def store_kv(
+        self, 
+        seq_id: int, 
+        token_ids: List[int],
+        blocks_to_tensor: Dict[int, torch.tensor]
+    ) -> None:
         print(f"storing seq {seq_id}")
         # # Create a sequence group
         # sequence = Sequence(

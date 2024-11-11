@@ -56,8 +56,7 @@ async def health() -> Response:
 @router.post("/store_kv")
 def store_kv_cache_endpoint(request: StoreKVRequest):
     global engine
-    result = engine.add_kv_transfer_request(request)
-    return result
+    engine.add_kv_transfer_request(request)
 
 @router.post("/compute_attention")
 async def calculate_attention_endpoint(query: str, context: str):

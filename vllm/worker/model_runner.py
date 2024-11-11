@@ -1517,6 +1517,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]], # b_id -> tensor
     ) -> None:
         self.kv_transfer_time[seq_id] = time.time()
+        logger.info(f"send {seq_id} at {time.time():.4f}")
         self.connector.store_kv(seq_id, token_ids, to_transfer_tensor_list)
         self.transfer_task_handlers.pop(seq_id)
         self.finished_transfer[seq_id] = True

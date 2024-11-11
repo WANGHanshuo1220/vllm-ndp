@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Set, List, DefaultDict
 import uvicorn
 import signal
+import time
 
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import Response
@@ -16,21 +17,15 @@ from typing import Dict, List, TypeAlias
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.mem_pool.engine import Memory_pool_engine
+from vllm.mem_pool.util import StoreKVRequest
 import torch
 
 router = APIRouter()
 _running_tasks: Set[asyncio.Task] = set()
 
-logger = init_logger('Memory Pool Server')
+logger = init_logger(__name__)
 
-# [2, block_size, num_kv_heads, head_size]
-KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 engine: Memory_pool_engine = None
-
-class StoreKVRequest(BaseModel):
-    seq_id: int
-    token_ids: List[int]
-    tensor_data: Dict[int, List[KVCAHE_DIMENSION]]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,18 +40,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-async def store_kv_cache(seq_id: int, 
-                         token_ids: List[int],
-                         blocks_to_tensor: Dict[int, List[torch.tensor]]):
-    # Here we simulate storing a key-value pair, such as in a cache or database
-    # Add the actual storage logic here
-    global engine
-    await engine.add_kv_transfer_request(seq_id, token_ids, 
-                                            blocks_to_tensor)
-
-    return {"status": "success"}
-
-
 async def calculate_attention(query: str, context: str):
     # Simulate an attention calculation function
     logger.info(f"Calculating attention for query: {query} with context: {context}")
@@ -64,31 +47,17 @@ async def calculate_attention(query: str, context: str):
     attention_result = {"query": query, "context": context, "attention_score": 0.95}
     return attention_result
 
-
 @router.get("/check_health")
 async def health() -> Response:
     """Health check."""
     print("check health")
     return Response(status_code=200)
 
-
 @router.post("/store_kv")
-async def store_kv_cache_endpoint(request: StoreKVRequest):
-    logger.info(f"recieve kv cache of {request.seq_id}")
-    # NOTE: Restore original tensor
-    blocks_to_tensor = {}
-    for block_id, tensor_list in request.tensor_data.items():
-        block_to_tensor = []
-        for layer_tensor_list in tensor_list:
-            org_layer_tensor = torch.tensor(layer_tensor_list)
-            block_to_tensor.append(org_layer_tensor)
-        blocks_to_tensor[block_id] = block_to_tensor
-
-    result = await store_kv_cache(request.seq_id, 
-                                  request.token_ids,
-                                  blocks_to_tensor)
+def store_kv_cache_endpoint(request: StoreKVRequest):
+    global engine
+    result = engine.add_kv_transfer_request(request)
     return result
-
 
 @router.post("/compute_attention")
 async def calculate_attention_endpoint(query: str, context: str):

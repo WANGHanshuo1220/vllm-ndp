@@ -20,6 +20,7 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
 from vllm.mem_pool.util import KVRequestTracker, KVTransferData, StoreKVRequest
+from vllm.mem_pool.radix_tree_cache import RadixCache
 import threading
 import concurrent.futures as cf
 
@@ -51,6 +52,8 @@ class Memory_pool_engine():
         self.attention_unit = self._create_attention()
         self.cache_enigne = self._create_cache_engine()
         self.block_manager = self._create_block_manager()
+
+        self.radix_tree = RadixCache(block_size=self.cache_config.block_size)
 
         self.kv_transfer_running = False
         self.kv_transfer_request_tracker: KVRequestTracker = None
@@ -140,8 +143,12 @@ class Memory_pool_engine():
     def _allocate(self) -> None:
         pass
 
-    def _update_radix_tree(self) -> None:
-        pass
+    def _update_radix_tree(
+        self,
+        token_ids: List[int],
+        block_ids: List[int]
+    ) -> None:
+        self.radix_tree.insert(token_ids, block_ids)
 
     def _kv_transfer_loop(self):
         while True:
@@ -212,8 +219,6 @@ class Memory_pool_engine():
         token_ids: List[int],
         blocks_to_tensor: Dict[int, List[torch.tensor]]
     ) -> None:
-        logger.info(f"Storing seq {seq_id}'s {len(token_ids)} tokens")
-
         # Create a sequence group
         sequence = Sequence(
             seq_id=seq_id,
@@ -246,10 +251,12 @@ class Memory_pool_engine():
             for i in range(len(kv_tensor_layers)):
                 tensor = kv_tensor_layers[i].view(2, self.dimension)
                 self.cache_enigne.cpu_cache[i][:,block_id,:] = tensor
-            logger.info(f"Save {block_id} of seq {seq_id} successfuly")
+            logger.debug(f"Save {block_id} of seq {seq_id} successfuly")
 
         # 4. Update radix tree
-
+        blocks = list(blocks_to_tensor.keys())
+        self._update_radix_tree(token_ids, blocks)
+        logger.info(f"Storing seq {seq_id} successfully")
 
     def compute_attention(self):
         pass

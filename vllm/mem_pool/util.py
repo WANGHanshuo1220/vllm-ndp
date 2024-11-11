@@ -40,7 +40,7 @@ class KVRequestTracker:
         loop iteration."""
         self.all_recieved_requests.append(seq_id)
         self._new_requests.put(content)
-        logger.info(f"recieve seq {seq_id}, queue len = {self._new_requests.qsize()}")
+        logger.debug(f"recieve seq {seq_id}, queue len = {self._new_requests.qsize()}")
 
     def get_new_requests(self) -> List[KVTransferData]:
         """Get the new requests and finished requests to be

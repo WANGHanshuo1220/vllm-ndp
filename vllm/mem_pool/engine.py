@@ -1,13 +1,14 @@
 import psutil
 import torch
-from typing import List, Dict, TypeAlias
+from typing import List, Dict, TypeAlias, Tuple
 import asyncio
 import time
 
 from vllm.attention.layer import Attention
 from vllm.core.block_manager_v2 import BlockSpaceManagerV2
 from vllm.worker.cpu_worker import CPUCacheEngine, CPUWorker
-from vllm.sequence import *
+from vllm.sequence import Sequence, SequenceGroup
+from vllm.inputs.data import LLMInputs
 from vllm.utils import init_logger
 from vllm.core.interfaces import AllocStatus
 
@@ -144,7 +145,7 @@ class Memory_pool_engine():
         while True:
             new_requests: List[KVTransferData] = \
                 self.kv_transfer_request_tracker.get_new_requests()
-
+            
             assert len(new_requests) <= self.max_kv_workers-1, \
                 f"Don't have enough workers{self.max_kv_workers-1} to serve"
                 
@@ -184,7 +185,7 @@ class Memory_pool_engine():
         self, 
         request: StoreKVRequest
     ) -> None:
-        logger.info(f"recieve {request.seq_id} at {time.time():.4f}")
+        logger.debug(f"recieve {request.seq_id} at {time.time():.4f}")
 
         # Start running loop if not
         if not self.kv_transfer_running:
@@ -203,15 +204,19 @@ class Memory_pool_engine():
         token_ids: List[int],
         blocks_to_tensor: Dict[int, torch.tensor]
     ) -> None:
-        logger.info(f"Storing seq {seq_id}")
+        logger.info(f"Storing seq {seq_id}'s {len(token_ids)} tokens")
+        for i in range(10):
+            print(f"{seq_id} -> {i}")
         # Create a sequence group
         sequence = Sequence(
             seq_id=seq_id,
-            inputs=LLMInputs(prompt_token_ids=token_ids),
+            inputs={"prompt_token_ids": token_ids},
             block_size=self.cache_config.block_size,
         )
         seq_group = SequenceGroup(
+            request_id=seq_id,
             seqs=[sequence],
+            arrival_time=time.time()
         )
 
         # NOTE: Here need lock for multi-processing safety
@@ -228,9 +233,6 @@ class Memory_pool_engine():
                 assert False, "Later exception is not implemented yet"
             else:
                 assert False, "Abort exception is not implemented yet"
-        
-        for seq_id, block_table in self.block_manager.block_tables.items():
-            print(f"{seq_id} -> {block_table}")
 
         # 3. Store tensors and update radix tree
 

@@ -112,7 +112,6 @@ async def run_server(args, **uvicorn_kwargs) -> None:
         **uvicorn_kwargs,
     )
 
-    # NB: Await server shutdown only after the backend context is exited
     await shutdown_task
 
 if __name__ == "__main__":

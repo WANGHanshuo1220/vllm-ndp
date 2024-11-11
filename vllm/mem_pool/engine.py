@@ -40,13 +40,14 @@ class Memory_pool_engine():
         self.device_config = device_config
         self.max_kv_workers = max_kv_workers
 
-        # self.attention_unit = self._create_attention()
-        # self.cache_enigne = self._create_cache_engine()
-        # self.block_manager = self._create_block_manager()
+        self.attention_unit = self._create_attention()
+        self.cache_enigne = self._create_cache_engine()
+        self.block_manager = self._create_block_manager()
 
         self.kv_transfer_running = False
         self.kv_transfer_request_tracker: KVRequestTracker = None
         self.executor = cf.ThreadPoolExecutor(max_workers=self.max_kv_workers)
+        self.block_manager_lock = threading.Lock()
 
         # self.attention_running_loop = False
         # self.attention_request_tracke:
@@ -202,29 +203,36 @@ class Memory_pool_engine():
         token_ids: List[int],
         blocks_to_tensor: Dict[int, torch.tensor]
     ) -> None:
-        print(f"storing seq {seq_id}")
-        # # Create a sequence group
-        # sequence = Sequence(
-        #     seq_id=seq_id,
-        #     inputs=LLMInputs(prompt_token_ids=token_ids),
-        #     block_size=self.cache_config.block_size,
-        # )
-        # seq_group = SequenceGroup(
-        #     seqs=[sequence],
-        # )
+        logger.info(f"Storing seq {seq_id}")
+        # Create a sequence group
+        sequence = Sequence(
+            seq_id=seq_id,
+            inputs=LLMInputs(prompt_token_ids=token_ids),
+            block_size=self.cache_config.block_size,
+        )
+        seq_group = SequenceGroup(
+            seqs=[sequence],
+        )
 
-        # # 1. Check if we can allocate blocks for this seq
-        # can_allocate = self._can_allocate(seq_group)
+        # NOTE: Here need lock for multi-processing safety
+        with self.block_manager_lock:
+            # 1. Check if we can allocate blocks for this seq
+            can_allocate = self._can_allocate(seq_group)
 
-        # # 2. Allocate if we can and free some blocks if neccessary
-        # if can_allocate == AllocStatus.OK:
-        #     # allocate blocks
-        #     self.block_manager.allocate(seq_group)
-        # else:
-        #     # free some blocks and allocate
-        #     pass
+            # 2. Allocate if we can and free some blocks if neccessary
+            if can_allocate == AllocStatus.OK:
+                # allocate blocks
+                self.block_manager.allocate(seq_group)
+            elif can_allocate == AllocStatus.LATER:
+                # free some blocks and allocate
+                assert False, "Later exception is not implemented yet"
+            else:
+                assert False, "Abort exception is not implemented yet"
+        
+        for seq_id, block_table in self.block_manager.block_tables.items():
+            print(f"{seq_id} -> {block_table}")
 
-        # # 3. Store tensors and update radix tree
+        # 3. Store tensors and update radix tree
 
     def compute_attention(self):
         pass

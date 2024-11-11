@@ -27,19 +27,26 @@ logger = init_logger(__name__)
 
 class Memory_pool_engine():
 
-    def __init__(self,
-                 model_config: ModelConfig,
-                 cache_config: CacheConfig,
-                 mem_pool_config: MemPoolConfig,
-                 parallel_config: ParallelConfig,
-                 device_config: DeviceConfig,
-                 max_kv_workers=6) -> None:
+    def __init__(
+        self,
+        model_config: ModelConfig,
+        cache_config: CacheConfig,
+        mem_pool_config: MemPoolConfig,
+        parallel_config: ParallelConfig,
+        device_config: DeviceConfig,
+        max_kv_workers=6
+    ) -> None:
         self.model_config = model_config
         self.cache_config = cache_config
         self.mem_pool_config = mem_pool_config
         self.parallel_config = parallel_config
         self.device_config = device_config
         self.max_kv_workers = max_kv_workers
+
+        self.dimension = (self.cache_config.block_size *
+                          self.model_config.get_num_attention_heads(
+                              self.parallel_config) *
+                          self.model_config.get_head_size())
 
         self.attention_unit = self._create_attention()
         self.cache_enigne = self._create_cache_engine()
@@ -81,6 +88,7 @@ class Memory_pool_engine():
 
         self.cache_config.num_gpu_blocks = num_cpu_blocks
         self.cache_config.num_cpu_blocks = 0
+        logger.info(f"Total number of cpu blocks = {num_cpu_blocks}")
 
         return CPUCacheEngine(self.cache_config, self.model_config,
                               self.parallel_config, self.device_config)
@@ -135,12 +143,6 @@ class Memory_pool_engine():
     def _update_radix_tree(self) -> None:
         pass
 
-    # @property
-    # def is_kv_transfer_running(self) -> bool:
-    #     return (self.kv_transfer_background_loop is not None
-    #             and self._kv_transfer_bg_loop_unshielded is not None
-    #             and not self._kv_transfer_bg_loop_unshielded.done())
-
     def _kv_transfer_loop(self):
         while True:
             new_requests: List[KVTransferData] = \
@@ -154,6 +156,12 @@ class Memory_pool_engine():
                 seq.blocks_to_tensor) for seq in new_requests]
             
             cf.wait(futures)
+
+            for future in futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"Error in thread: {e}")
 
     def _start_kv_transfer_thread(self) -> None:
 
@@ -202,11 +210,10 @@ class Memory_pool_engine():
         self, 
         seq_id: int, 
         token_ids: List[int],
-        blocks_to_tensor: Dict[int, torch.tensor]
+        blocks_to_tensor: Dict[int, List[torch.tensor]]
     ) -> None:
         logger.info(f"Storing seq {seq_id}'s {len(token_ids)} tokens")
-        for i in range(10):
-            print(f"{seq_id} -> {i}")
+
         # Create a sequence group
         sequence = Sequence(
             seq_id=seq_id,
@@ -234,7 +241,15 @@ class Memory_pool_engine():
             else:
                 assert False, "Abort exception is not implemented yet"
 
-        # 3. Store tensors and update radix tree
+        # 3. Store tensors to cpu cache
+        for block_id, kv_tensor_layers in blocks_to_tensor.items():
+            for i in range(len(kv_tensor_layers)):
+                tensor = kv_tensor_layers[i].view(2, self.dimension)
+                self.cache_enigne.cpu_cache[i][:,block_id,:] = tensor
+            logger.info(f"Save {block_id} of seq {seq_id} successfuly")
+
+        # 4. Update radix tree
+
 
     def compute_attention(self):
         pass

@@ -5,7 +5,7 @@ import asyncio
 import time
 import traceback
 
-from vllm.attention.layer import Attention
+from vllm.mem_pool.attention import Attention
 from vllm.core.block_manager_v2 import BlockSpaceManagerV2
 from vllm.worker.cpu_worker import CPUCacheEngine, CPUWorker
 from vllm.sequence import Sequence, SequenceGroup
@@ -253,8 +253,6 @@ class Memory_pool_engine():
         # 3. Store tensors to cpu cache
         allocated_blocks = self.block_manager.get_block_table(sequence)
         blocks_reusable = self.block_manager.get_block_reusable(sequence)
-        print(f"prefill: {allocated_blocks}")
-        print(f"prefill: {blocks_reusable}")
         assert len(allocated_blocks) == len(blocks_reusable)
         assert len(allocated_blocks) == len(blocks_to_tensor)
         for i, (_, kv_tensor_layers) in enumerate(blocks_to_tensor.items()):
@@ -325,5 +323,9 @@ class Memory_pool_engine():
             self.block_manager.append_slots(
                 sequence, num_lookahead_slots=0)
         
-        allocated_blocks = self.block_manager.get_block_table(sequence)
-        print(f"decode: {allocated_blocks}")
+        # 3. Prepare attn_metadata
+
+        
+        # 4. Attention computation
+        self.attention_unit()
+        

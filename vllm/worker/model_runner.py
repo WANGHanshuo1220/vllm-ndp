@@ -1618,12 +1618,16 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                             self.transfer_task_handlers[seq_id]
                         )
 
+        seq_ids = list(model_input.request_ids_to_seq_ids.values())
+        seq_ids = sum(seq_ids, [])
+        
         hidden_or_intermediate_states = model_executable(
             input_ids=model_input.input_tokens,
             positions=model_input.input_positions,
             kv_caches=kv_caches,
             attn_metadata=model_input.attn_metadata,
             intermediate_tensors=intermediate_tensors,
+            seq_ids=seq_ids,
             **MultiModalInputs.as_kwargs(multi_modal_kwargs,
                                          device=self.device),
             **seqlen_agnostic_kwargs)

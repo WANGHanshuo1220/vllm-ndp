@@ -273,6 +273,9 @@ class BlockSpaceManagerV2(BlockSpaceManager):
         block_ids = self.block_tables[seq.seq_id].physical_block_ids
         return block_ids  # type: ignore
 
+    def get_block_reusable(self, seq: Sequence) -> List[bool]:
+        return self.block_tables[seq.seq_id].physical_block_ids_reusable
+
     def get_cross_block_table(self, seq_group: SequenceGroup) -> List[int]:
         request_id = seq_group.request_id
         assert request_id in self.cross_block_tables

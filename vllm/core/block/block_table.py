@@ -237,6 +237,13 @@ class BlockTable:
         assert self._is_allocated
         return self._blocks.ids()
 
+    @property
+    def physical_block_ids_reusable(self) -> List[bool]:
+        reusable = []
+        for block in self._blocks.list():
+            reusable.append(block.reusable)
+        return reusable
+
     def get_unseen_token_ids(self, sequence_token_ids: List[int]) -> List[int]:
         """Get the number of "unseen" tokens in the sequence.
 

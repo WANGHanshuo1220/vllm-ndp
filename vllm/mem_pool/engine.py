@@ -306,9 +306,9 @@ class Memory_pool_engine():
     def compute_attention(self, request: AttentionComputation):
 
         # 1. Prepare all the data
-        query = torch.tensor(request.query)
-        key = torch.tensor(request.key)
-        value = torch.tensor(request.value)
+        query = torch.tensor(request.query).to(torch.bfloat16)
+        key = torch.tensor(request.key).to(torch.bfloat16)
+        value = torch.tensor(request.value).to(torch.bfloat16)
         
         cpu_attn_metadata = self._create_cpu_attn_metadata(
             seq_lens_tensor=torch.tensor(request.seq_len_tensor),

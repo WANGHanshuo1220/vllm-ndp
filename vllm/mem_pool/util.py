@@ -4,11 +4,25 @@ import torch
 import asyncio
 from vllm.utils import init_logger
 from pydantic import BaseModel
+from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 
 logger = init_logger(__name__)
 
 # [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
+
+# [num_tokens, token_embedding]
+QKV_DIMENSION: TypeAlias = List[List[float]]
+
+class AttentionComputation(BaseModel):
+    query: QKV_DIMENSION
+    key: QKV_DIMENSION
+    value: QKV_DIMENSION
+    seq_len_tensor: List[int]
+    max_decode_seq_len: int
+    num_decode_tokens: int
+    seq_lens: List[int]
+    seqs_data: Dict[int, List[int]]
 
 class StoreKVRequest(BaseModel):
     seq_id: int

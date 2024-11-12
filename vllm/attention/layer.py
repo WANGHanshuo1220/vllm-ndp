@@ -13,9 +13,6 @@ from vllm.model_executor.layers.quantization.kv_cache import BaseKVCacheMethod
 
 from vllm.mem_pool.connector import Remote_connector
 import asyncio
-from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
-from vllm.attention.backends.flash_attn import FlashAttentionMetadata
-
 
 class Attention(nn.Module):
     """Attention layer.
@@ -103,25 +100,6 @@ class Attention(nn.Module):
             Attention._connector is None):
             Attention._connector = Remote_connector(mem_pool_config)
 
-    def create_cpu_attn_metadata(
-        self,
-        attn_metadata: FlashAttentionMetadata
-    ) -> TorchSDPAMetadata:
-        assert attn_metadata.num_prefills == 0
-        assert attn_metadata.num_decode_tokens > 0
-        cpu_attn_metadata = TorchSDPAMetadata(
-            num_prefills=0,
-            num_prefill_tokens=0,
-            seq_lens_tensor=attn_metadata.seq_lens_tensor,
-            max_decode_seq_len=attn_metadata.max_decode_seq_len,
-            block_tables=[],
-            num_decode_tokens=attn_metadata.num_decode_tokens,
-            slot_mapping=[],
-            is_prompt=False,
-            seq_lens=attn_metadata.seq_lens
-        )
-        return cpu_attn_metadata
-
     def forward(
         self,
         query: torch.Tensor,
@@ -130,11 +108,11 @@ class Attention(nn.Module):
         kv_cache: Optional[torch.Tensor],
         attn_metadata: AttentionMetadata,
         attn_type: AttentionType = AttentionType.DECODER,
-        seq_ids: Optional[List[int]] = None,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> torch.Tensor:
         if (Attention._connector is not None
             and attn_metadata.decode_metadata is not None
-            and seq_ids is not None):
+            and seqs_data is not None):
 
             # TODO:Here we need to invoke remote memory pool
             # to compute attention. 
@@ -143,10 +121,15 @@ class Attention(nn.Module):
 
             assert self.attn_event_loop is not None
 
-            # 1. Create a cpu-based attn_metadata for decode
-            cpu_attn_metadata = self.create_cpu_attn_metadata(attn_metadata)
-
-            # 2. Transfer q,k,v and cpu_attn_metadata and get result
+            # Transfer q,k,v and cpu_attn_metadata and get result
+            res = Attention._connector.compute_attention(
+                query=query, key=key, value=value,
+                seq_len_tensor=attn_metadata.seq_lens_tensor,
+                max_decode_seq_len=attn_metadata.max_decode_seq_len,
+                num_decode_tokens=attn_metadata.num_decode_tokens,
+                seq_lens=attn_metadata.seq_lens,
+                seqs_data=seqs_data
+            )
             # task = self.attn_event_loop.create_task(
             #     Attention._connector.dummy_call()
             # )

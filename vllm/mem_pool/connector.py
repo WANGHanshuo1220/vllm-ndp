@@ -3,13 +3,15 @@ import json
 import os
 import torch
 import aiohttp
-from typing import Dict, List, TypeAlias
+from typing import Dict, List, TypeAlias, Optional
 from vllm.logger import init_logger
 from vllm.config import MemPoolConfig
 import asyncio
 from pydantic import BaseModel
 import time
 import requests
+
+from vllm.attention import AttentionMetadata, AttentionType
 
 logger = init_logger(__name__)
 
@@ -31,28 +33,34 @@ class Remote_connector():
         self.base_url = f"http://{self.host}:{self.port}"
         self.session = requests.Session()
     
-    async def compute_attention(self, q, k, v) -> None:
-        # Check session is on
-        if self.session_running is False:
-            self.init_session()
-
-        # preprocessing q,k,v
-
-        output = PushdownResponse()
+    def compute_attention(
+        self, 
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        seq_len_tensor: torch.Tensor,
+        max_decode_seq_len: int,
+        num_decode_tokens: int,
+        seq_lens: List[int],
+        seqs_data: Optional[Dict[int, List[int]]] = None,
+    ) -> None:
+        url = self.base_url + "/compute_attention"
+        payload = {
+            "query": query.tolist(),
+            "key": key.tolist(),
+            "value": value.tolist(),
+            "seq_len_tensor": seq_len_tensor.tolist(),
+            "max_decode_seq_len": max_decode_seq_len,
+            "num_decode_tokens": num_decode_tokens,
+            "seq_lens": seq_lens,
+            "seqs_data": seqs_data
+        }
         try:
-            global session
-            url = self.base_url + "/compute_attention"
-            async with session.post() as response:
-                if response.status == 200:
-                    pass
-                else:
-                    output.hidden_states = None
-                    output.success = False
-        except Exception:
-            logger.warning(f"pushdown connection timeout, restarting session...")
-            self.close_session()
-            self.init_session()
-            logger.warning(f"restarting session complete")
+            response = self.session.post(url, json=payload, timeout=60)
+            if response.status_code == 200:
+                pass
+        except Exception as e:
+            print(f"Error: {e}")
     
     def store_kv(
         self, 

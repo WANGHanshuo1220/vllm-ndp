@@ -17,7 +17,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Inference-only OPT model compatible with HuggingFace weights."""
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, Dict
 
 import torch
 from torch import nn
@@ -104,14 +104,14 @@ class OPTAttention(nn.Module):
         hidden_states: torch.Tensor,
         kv_cache: torch.Tensor,
         attn_metadata: AttentionMetadata,
-        seq_ids: Optional[List[int]] = None,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> torch.Tensor:
         # print(f"hidden: {hidden_states.shape}")
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
         # print(f"q: {q.shape}, k: {k.shape}, v: {v.shape}")
         attn_output = self.attn(q, k, v, kv_cache, 
-                                attn_metadata, seq_ids=seq_ids)
+                                attn_metadata, seqs_data=seqs_data)
         output, _ = self.out_proj(attn_output)
         return output
 
@@ -164,7 +164,7 @@ class OPTDecoderLayer(nn.Module):
         hidden_states: torch.Tensor,
         kv_cache: torch.Tensor,
         attn_metadata: AttentionMetadata,
-        seq_ids: Optional[List[int]] = None,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> torch.Tensor:
         # Self Attention
         residual = hidden_states
@@ -174,7 +174,7 @@ class OPTDecoderLayer(nn.Module):
         hidden_states = self.self_attn(hidden_states=hidden_states,
                                        kv_cache=kv_cache,
                                        attn_metadata=attn_metadata,
-                                       seq_ids=seq_ids)
+                                       seqs_data=seqs_data)
         hidden_states = residual + hidden_states
         # 350m applies layer norm AFTER attention
         if not self.do_layer_norm_before:
@@ -261,7 +261,7 @@ class OPTDecoder(nn.Module):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         inputs_embeds: Optional[torch.Tensor] = None,
-        seq_ids: Optional[List[int]] = None,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> torch.Tensor:
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings(input_ids)
@@ -273,7 +273,7 @@ class OPTDecoder(nn.Module):
         for i in range(len(self.layers)):
             layer = self.layers[i]
             hidden_states = layer(hidden_states, kv_caches[i], 
-                                  attn_metadata, seq_ids)
+                                  attn_metadata, seqs_data=seqs_data)
 
         if self.final_layer_norm is not None:
             hidden_states = self.final_layer_norm(hidden_states)
@@ -305,14 +305,14 @@ class OPTModel(nn.Module):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         inputs_embeds: Optional[torch.Tensor] = None,
-        seq_ids: Optional[List[int]] = None,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> torch.Tensor:
         return self.decoder(input_ids,
                             positions,
                             kv_caches,
                             attn_metadata,
                             inputs_embeds=inputs_embeds,
-                            seq_ids=seq_ids)
+                            seqs_data=seqs_data)
 
 
 class OPTForCausalLM(nn.Module):
@@ -344,11 +344,11 @@ class OPTForCausalLM(nn.Module):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
-        seq_ids: Optional[List[int]] = None,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> torch.Tensor:
         hidden_states = self.model(input_ids, positions, 
                                    kv_caches, attn_metadata,
-                                   seq_ids=seq_ids)
+                                   seqs_data=seqs_data)
         return hidden_states
 
     def compute_logits(

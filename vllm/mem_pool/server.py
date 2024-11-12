@@ -17,7 +17,7 @@ from typing import Dict, List, TypeAlias
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.mem_pool.engine import Memory_pool_engine
-from vllm.mem_pool.util import StoreKVRequest
+from vllm.mem_pool.util import StoreKVRequest, AttentionComputation
 import torch
 
 router = APIRouter()
@@ -40,13 +40,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-async def calculate_attention(query: str, context: str):
-    # Simulate an attention calculation function
-    logger.info(f"Calculating attention for query: {query} with context: {context}")
-    # Add the actual attention calculation logic here
-    attention_result = {"query": query, "context": context, "attention_score": 0.95}
-    return attention_result
-
 @router.get("/check_health")
 async def health() -> Response:
     """Health check."""
@@ -55,16 +48,14 @@ async def health() -> Response:
 
 @router.post("/store_kv")
 def store_kv_cache_endpoint(request: StoreKVRequest):
-    global engine
-    engine.add_kv_transfer_request(request)
+    print("recive store kv")
+    # global engine
+    # engine.add_kv_transfer_request(request)
 
 @router.post("/compute_attention")
-async def calculate_attention_endpoint(query: str, context: str):
+def calculate_attention_endpoint(request: AttentionComputation):
     global engine
-    assert engine is not None
-
-    result = await calculate_attention(query, context)
-    return result
+    return engine.compute_attention(request)
 
 async def init_app(args):
     app = FastAPI(lifespan=lifespan)

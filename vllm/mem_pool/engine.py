@@ -20,8 +20,10 @@ from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
-from vllm.mem_pool.util import KVRequestTracker, KVTransferData, StoreKVRequest
+from vllm.mem_pool.util import (KVRequestTracker, KVTransferData, 
+                                StoreKVRequest, AttentionComputation)
 from vllm.mem_pool.radix_tree_cache import RadixCache
+from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 import threading
 import concurrent.futures as cf
 
@@ -50,9 +52,9 @@ class Memory_pool_engine():
                               self.parallel_config) *
                           self.model_config.get_head_size())
 
-        self.attention_unit = self._create_attention()
-        self.cache_enigne = self._create_cache_engine()
-        self.block_manager = self._create_block_manager()
+        # self.attention_unit = self._create_attention()
+        # self.cache_enigne = self._create_cache_engine()
+        # self.block_manager = self._create_block_manager()
 
         self.radix_tree = RadixCache(block_size=self.cache_config.block_size)
 
@@ -268,5 +270,55 @@ class Memory_pool_engine():
         self._update_radix_tree(token_ids, blocks)
         logger.debug(f"Store seq {seq_id} to radix tree successfully")
 
-    def compute_attention(self):
-        pass
+    def _create_cpu_attn_metadata(
+        self,
+        seq_lens_tensor: torch.Tensor,
+        max_decode_seq_len: int,
+        num_decode_tokens: int,
+        seq_lens: List[int]
+    ) -> TorchSDPAMetadata:
+        cpu_attn_metadata = TorchSDPAMetadata(
+            num_prefills=0,
+            num_prefill_tokens=0,
+            seq_lens_tensor=seq_lens_tensor,
+            max_decode_seq_len=max_decode_seq_len,
+            block_tables=[],
+            num_decode_tokens=num_decode_tokens,
+            slot_mapping=[],
+            is_prompt=False,
+            seq_lens=seq_lens
+        )
+        return cpu_attn_metadata
+
+    def compute_attention(self, request: AttentionComputation):
+
+        # 1. Prepare all the data
+        query = torch.tensor(request.query)
+        key = torch.tensor(request.key)
+        value = torch.tensor(request.value)
+        
+        cpu_attn_metadata = self._create_cpu_attn_metadata(
+            seq_lens_tensor=torch.tensor(request.seq_len_tensor),
+            max_decode_seq_len=request.max_decode_seq_len,
+            num_decode_tokens=request.num_decode_tokens,
+            seq_lens=request.seq_lens
+        )
+
+        # 2. Allocate blocks if necessary
+        for seq_id, token_ids in request.seqs_data.items():
+            sequence = Sequence(
+                seq_id=seq_id,
+                inputs={"prompt_token_ids": token_ids},
+                block_size=self.cache_config.block_size,
+            )
+            seq_group = SequenceGroup(
+                request_id=seq_id,
+                seqs=[sequence],
+                arrival_time=time.time()
+            )
+
+            # assert self.block_manager.can_append_slots(
+            #     seq_group, num_lookahead_slots=0)
+            
+            # self.block_manager.append_slots(
+            #     sequence, num_lookahead_slots=0)

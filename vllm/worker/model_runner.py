@@ -1587,13 +1587,16 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # TODO(andoorve): We can remove this once all
         # virtual engines share the same kv cache.
         virtual_engine = model_input.virtual_engine
-        if prefill_meta is None and decode_meta.use_cuda_graph:
-            assert model_input.input_tokens is not None
-            graph_batch_size = model_input.input_tokens.shape[0]
-            model_executable = self.graph_runners[virtual_engine][
-                graph_batch_size]
-        else:
-            model_executable = self.model
+        # if prefill_meta is None and decode_meta.use_cuda_graph:
+        #     assert model_input.input_tokens is not None
+        #     graph_batch_size = model_input.input_tokens.shape[0]
+        #     model_executable = self.graph_runners[virtual_engine][
+        #         graph_batch_size]
+        # else:
+        #     model_executable = self.model
+
+        # FIXME: Try to use cuda graph in this scenorio
+        model_executable = self.model
 
         multi_modal_kwargs = model_input.multi_modal_kwargs or {}
         seqlen_agnostic_kwargs = {
@@ -1621,13 +1624,20 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         seq_ids = list(model_input.request_ids_to_seq_ids.values())
         seq_ids = sum(seq_ids, [])
         
+        # seq_id -> token_ids
+        seqs_data: Dict[int, List[int]] = {}
+        if model_input.seq_group_metadata_list is not None:
+            for seq_group_meta in model_input.seq_group_metadata_list:
+                for seq_id, seq_data in seq_group_meta.seq_data.items():
+                    seqs_data[seq_id] = seq_data.get_token_ids()
+
         hidden_or_intermediate_states = model_executable(
             input_ids=model_input.input_tokens,
             positions=model_input.input_positions,
             kv_caches=kv_caches,
             attn_metadata=model_input.attn_metadata,
             intermediate_tensors=intermediate_tensors,
-            seq_ids=seq_ids,
+            seqs_data=seqs_data,
             **MultiModalInputs.as_kwargs(multi_modal_kwargs,
                                          device=self.device),
             **seqlen_agnostic_kwargs)

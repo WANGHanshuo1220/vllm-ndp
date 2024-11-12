@@ -3,6 +3,7 @@ import torch
 from typing import List, Dict, TypeAlias, Tuple
 import asyncio
 import time
+import traceback
 
 from vllm.attention.layer import Attention
 from vllm.core.block_manager_v2 import BlockSpaceManagerV2
@@ -110,7 +111,7 @@ class Memory_pool_engine():
             num_gpu_blocks=num_gpu_blocks,
             num_cpu_blocks=num_cpu_blocks,
             sliding_window=self.cache_config.sliding_window,
-            enable_caching=self.cache_config.enable_prefix_caching)
+            enable_caching=True)
 
     def _get_available_cpu_memory(self):
         memory_info = psutil.virtual_memory()
@@ -169,6 +170,7 @@ class Memory_pool_engine():
                     future.result()
                 except Exception as e:
                     print(f"Error in thread: {e}")
+                    traceback.print_exc()
 
     def _start_kv_transfer_thread(self) -> None:
 
@@ -248,18 +250,23 @@ class Memory_pool_engine():
 
         # 3. Store tensors to cpu cache
         allocated_blocks = self.block_manager.get_block_table(sequence)
-        print(f"allocated blocks = {allocated_blocks}")
-        print(f"args blocks = {blocks_to_tensor.keys()}")
-        for block_id, kv_tensor_layers in blocks_to_tensor.items():
-            for i in range(len(kv_tensor_layers)):
-                tensor = kv_tensor_layers[i].view(2, self.dimension)
-                self.cache_enigne.cpu_cache[i][:,block_id,:] = tensor
-            logger.debug(f"Save {block_id} of seq {seq_id} successfuly")
+        blocks_reusable = self.block_manager.get_block_reusable(sequence)
+        assert len(allocated_blocks) == len(blocks_reusable)
+        assert len(allocated_blocks) == len(blocks_to_tensor)
+        for i, (_, kv_tensor_layers) in enumerate(blocks_to_tensor.items()):
+            block_id = allocated_blocks[i]
+            if not blocks_reusable[i]:
+                for i in range(len(kv_tensor_layers)):
+                    tensor = kv_tensor_layers[i].view(2, self.dimension)
+                    self.cache_enigne.cpu_cache[i][:,block_id,:] = tensor
+                logger.debug(f"Save {block_id} of seq {seq_id} successfuly")
+            else:
+                logger.debug(f"Reuse {block_id} of seq {seq_id}")
 
         # 4. Update radix tree
         blocks = list(blocks_to_tensor.keys())
         self._update_radix_tree(token_ids, blocks)
-        logger.info(f"Storing seq {seq_id} successfully")
+        logger.debug(f"Store seq {seq_id} to radix tree successfully")
 
     def compute_attention(self):
         pass

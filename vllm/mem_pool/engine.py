@@ -247,6 +247,9 @@ class Memory_pool_engine():
                 assert False, "Abort exception is not implemented yet"
 
         # 3. Store tensors to cpu cache
+        allocated_blocks = self.block_manager.get_block_table(sequence)
+        print(f"allocated blocks = {allocated_blocks}")
+        print(f"args blocks = {blocks_to_tensor.keys()}")
         for block_id, kv_tensor_layers in blocks_to_tensor.items():
             for i in range(len(kv_tensor_layers)):
                 tensor = kv_tensor_layers[i].view(2, self.dimension)

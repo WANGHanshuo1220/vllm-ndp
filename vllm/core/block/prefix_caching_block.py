@@ -164,6 +164,8 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             self.metric_data.query(hit=True)
             block.block_id = cached_block_id
             self._incr_refcount_cached_block(block)
+            block.set_reusable(True)
+            assert block.reusable is True
             return block
         self.metric_data.query(hit=False)
         self._block_pool.free_block(block)
@@ -207,8 +209,10 @@ class PrefixCachingBlockAllocator(BlockAllocator):
                                             token_ids=[],
                                             block_size=self._block_size,
                                             physical_block_id=block_id)
+        block.set_reusable(False)
         assert not block.computed
         assert block.content_hash is None
+        assert block.reusable is False
         return block
 
     def _incr_refcount_cached_block(self, block: Block) -> None:
@@ -689,6 +693,7 @@ class PrefixCachingBlock(Block):
         self._allocator = allocator
         self._last_accessed: float = _DEFAULT_LAST_ACCESSED_TIME
         self._computed = computed
+        self._reusable = False
 
         # On the first time, we create the block object, and next we only
         # reinitialize it
@@ -830,6 +835,13 @@ class PrefixCachingBlock(Block):
             prev_block_hash,
             cur_block_token_ids=self.token_ids)
         return self._cached_content_hash
+
+    @property
+    def reusable(self) -> Optional[bool]:
+        return self._reusable
+
+    def set_reusable(self, reusable: bool) -> None:
+        self._reusable = reusable
 
     @staticmethod
     def hash_block_tokens(is_first_block: bool, prev_block_hash: Optional[int],

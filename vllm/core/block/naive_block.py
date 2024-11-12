@@ -462,3 +462,16 @@ class NaiveBlock(Block):
     @property
     def content_hash(self) -> Optional[int]:
         return None
+
+    @property
+    def reusable(self) -> Optional[bool]:
+        """Indicate whether this block is cached block for reuse
+        and should only be used by PrefixCachingAllocator
+        """
+        raise NotImplementedError
+
+    def set_reusable(self, reusable: bool) -> None:
+        """Set reusable
+        and should only be used by PrefixCachingAllocator
+        """
+        raise NotImplementedError

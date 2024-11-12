@@ -42,8 +42,9 @@ class Remote_connector():
         max_decode_seq_len: int,
         num_decode_tokens: int,
         seq_lens: List[int],
-        seqs_data: Optional[Dict[int, List[int]]] = None,
-    ) -> None:
+        seqs_data: Dict[int, List[int]],
+        layer: int,
+    ) -> torch.Tensor:
         url = self.base_url + "/compute_attention"
         payload = {
             "query": query.tolist(),
@@ -53,13 +54,14 @@ class Remote_connector():
             "max_decode_seq_len": max_decode_seq_len,
             "num_decode_tokens": num_decode_tokens,
             "seq_lens": seq_lens,
-            "seqs_data": seqs_data
+            "seqs_data": seqs_data,
+            "layer": layer
         }
         try:
             response = self.session.post(url, json=payload, timeout=60)
             if response.status_code == 200:
                 data = response.json()
-                print(data["result"])
+                return torch.tensor(data["result"])
         except Exception as e:
             print(f"Error: {e}")
     

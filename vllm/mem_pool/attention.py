@@ -95,7 +95,6 @@ class Attention(nn.Module):
         kv_cache: Optional[torch.Tensor],
         attn_metadata: AttentionMetadata,
         attn_type: AttentionType = AttentionType.DECODER,
-        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> torch.Tensor:
         return self.impl.forward(query,
                                  key,

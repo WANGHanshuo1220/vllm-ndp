@@ -289,6 +289,19 @@ class Memory_pool_engine():
             seq_lens=seq_lens
         )
         return cpu_attn_metadata
+    
+    def _convert_list_to_tensor_padding(
+        self, 
+        _block_tables: List
+    ) -> torch.Tensor:
+        max_len = max(len(sublist) for sublist in _block_tables)
+        
+        padded_block_tables = [sublist + [0] * (max_len - len(sublist)) 
+                               for sublist in _block_tables]
+        
+        tensor_block_tables = torch.tensor(padded_block_tables)
+        
+        return tensor_block_tables
 
     def compute_attention(self, request: AttentionComputation):
 
@@ -304,8 +317,9 @@ class Memory_pool_engine():
             seq_lens=request.seq_lens
         )
 
-        # 2. Allocate blocks if necessary
-        for seq_id, token_ids in request.seqs_data.items():
+        _block_tables = []
+        _slot_mapping = []
+        for i, (seq_id, token_ids) in enumerate(request.seqs_data.items()):
             sequence = Sequence(
                 seq_id=seq_id,
                 inputs={"prompt_token_ids": token_ids},
@@ -317,15 +331,33 @@ class Memory_pool_engine():
                 arrival_time=time.time()
             )
 
+            # 2. Allocate blocks if necessary
             assert self.block_manager.can_append_slots(
                 seq_group, num_lookahead_slots=0)
             
             self.block_manager.append_slots(
                 sequence, num_lookahead_slots=0)
         
-        # 3. Prepare attn_metadata
+            # 3. Get block info and slot_mapping to attn_matadata
+            block_ids = self.block_manager.get_block_table(sequence)
+            _block_tables.append(block_ids)
 
+            offset = request.seq_lens[i] 
+            if offset > self.cache_config.block_size:
+                offset = offset % self.cache_config.block_size
+
+            slot_mapping = (block_ids[-1] * self.cache_config.block_size
+                            + offset - 1)
+            _slot_mapping.append(slot_mapping)
         
+        block_tables = self._convert_list_to_tensor_padding(_block_tables)
+        cpu_attn_metadata.block_tables = block_tables
+        cpu_attn_metadata.slot_mapping = torch.tensor(_slot_mapping)
+
         # 4. Attention computation
-        self.attention_unit()
+        layer = request.layer
+        output = self.attention_unit(query, key, value,
+                                     self.cache_enigne.cpu_cache[layer],
+                                     cpu_attn_metadata)
+        return {"result": output.tolist()}
         

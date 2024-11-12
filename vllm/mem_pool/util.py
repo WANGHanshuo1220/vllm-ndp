@@ -23,6 +23,7 @@ class AttentionComputation(BaseModel):
     num_decode_tokens: int
     seq_lens: List[int]
     seqs_data: Dict[int, List[int]]
+    layer: int
 
 class StoreKVRequest(BaseModel):
     seq_id: int

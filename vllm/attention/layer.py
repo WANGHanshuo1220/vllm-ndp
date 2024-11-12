@@ -109,6 +109,7 @@ class Attention(nn.Module):
         attn_metadata: AttentionMetadata,
         attn_type: AttentionType = AttentionType.DECODER,
         seqs_data: Optional[Dict[int, List[int]]] = None,
+        layer: Optional[int] = None,
     ) -> torch.Tensor:
         if (Attention._connector is not None
             and attn_metadata.decode_metadata is not None
@@ -128,12 +129,10 @@ class Attention(nn.Module):
                 max_decode_seq_len=attn_metadata.max_decode_seq_len,
                 num_decode_tokens=attn_metadata.num_decode_tokens,
                 seq_lens=attn_metadata.seq_lens,
-                seqs_data=seqs_data
+                seqs_data=seqs_data,
+                layer=layer
             )
-            # task = self.attn_event_loop.create_task(
-            #     Attention._connector.dummy_call()
-            # )
-            # self.attn_event_loop.run_until_complete(task)
+            return res
 
         # q, k, v are all [num_tokens, embedding_size]
         return self.impl.forward(query,

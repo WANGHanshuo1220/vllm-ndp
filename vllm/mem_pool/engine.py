@@ -52,9 +52,9 @@ class Memory_pool_engine():
                               self.parallel_config) *
                           self.model_config.get_head_size())
 
-        # self.attention_unit = self._create_attention()
-        # self.cache_enigne = self._create_cache_engine()
-        # self.block_manager = self._create_block_manager()
+        self.attention_unit = self._create_attention()
+        self.cache_enigne = self._create_cache_engine()
+        self.block_manager = self._create_block_manager()
 
         self.radix_tree = RadixCache(block_size=self.cache_config.block_size)
 
@@ -253,6 +253,8 @@ class Memory_pool_engine():
         # 3. Store tensors to cpu cache
         allocated_blocks = self.block_manager.get_block_table(sequence)
         blocks_reusable = self.block_manager.get_block_reusable(sequence)
+        print(f"prefill: {allocated_blocks}")
+        print(f"prefill: {blocks_reusable}")
         assert len(allocated_blocks) == len(blocks_reusable)
         assert len(allocated_blocks) == len(blocks_to_tensor)
         for i, (_, kv_tensor_layers) in enumerate(blocks_to_tensor.items()):
@@ -317,10 +319,11 @@ class Memory_pool_engine():
                 arrival_time=time.time()
             )
 
-            # assert self.block_manager.can_append_slots(
-            #     seq_group, num_lookahead_slots=0)
+            assert self.block_manager.can_append_slots(
+                seq_group, num_lookahead_slots=0)
             
-            # self.block_manager.append_slots(
-            #     sequence, num_lookahead_slots=0)
+            self.block_manager.append_slots(
+                sequence, num_lookahead_slots=0)
         
-        return {"result": True}
+        allocated_blocks = self.block_manager.get_block_table(sequence)
+        print(f"decode: {allocated_blocks}")

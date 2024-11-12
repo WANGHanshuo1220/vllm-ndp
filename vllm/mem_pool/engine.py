@@ -322,3 +322,5 @@ class Memory_pool_engine():
             
             # self.block_manager.append_slots(
             #     sequence, num_lookahead_slots=0)
+        
+        return {"result": True}

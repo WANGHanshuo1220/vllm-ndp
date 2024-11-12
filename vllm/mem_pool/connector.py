@@ -58,7 +58,8 @@ class Remote_connector():
         try:
             response = self.session.post(url, json=payload, timeout=60)
             if response.status_code == 200:
-                pass
+                data = response.json()
+                print(data["result"])
         except Exception as e:
             print(f"Error: {e}")
     

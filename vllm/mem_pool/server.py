@@ -16,7 +16,7 @@ from typing import Dict, List, TypeAlias
 
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.entrypoints.openai.cli_args import make_arg_parser
-from vllm.mem_pool.engine import Memory_pool_engine
+from vllm.mem_pool.gpu_engine import Memory_pool_engine
 from vllm.mem_pool.util import StoreKVRequest, AttentionComputation
 import torch
 

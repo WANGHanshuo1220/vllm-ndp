@@ -107,6 +107,9 @@ class BlockSpaceManagerV2(BlockSpaceManager):
         self._last_access_blocks_tracker = LastAccessBlocksTracker(
             self.block_allocator)
 
+    def has_seq(self, seq: Sequence) -> bool:
+        return (seq.seq_id in self.block_tables)
+
     def can_allocate(self, seq_group: SequenceGroup) -> AllocStatus:
         # FIXME(woosuk): Here we assume that all sequences in the group share
         # the same prompt. This may not be true for preempted sequences.

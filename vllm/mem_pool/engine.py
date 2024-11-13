@@ -7,7 +7,8 @@ import traceback
 
 from vllm.mem_pool.attention import Attention
 from vllm.core.block_manager_v2 import BlockSpaceManagerV2
-from vllm.worker.cpu_worker import CPUCacheEngine, CPUWorker
+from vllm.worker.cpu_worker import CPUCacheEngine
+from vllm.executor.cpu_executor import _verify_and_get_model_config
 from vllm.sequence import Sequence, SequenceGroup
 from vllm.inputs.data import LLMInputs
 from vllm.utils import init_logger
@@ -96,6 +97,7 @@ class Memory_pool_engine():
         self.cache_config.num_cpu_blocks = 0
         logger.info(f"Total number of cpu blocks = {num_cpu_blocks}")
 
+        _verify_and_get_model_config(self.model_config)
         return CPUCacheEngine(self.cache_config, self.model_config,
                               self.parallel_config, self.device_config)
 
@@ -299,19 +301,21 @@ class Memory_pool_engine():
         padded_block_tables = [sublist + [0] * (max_len - len(sublist)) 
                                for sublist in _block_tables]
         
-        tensor_block_tables = torch.tensor(padded_block_tables)
+        tensor_block_tables = torch.tensor(padded_block_tables,
+                                           dtype=torch.int32)
         
         return tensor_block_tables
 
     def compute_attention(self, request: AttentionComputation):
 
         # 1. Prepare all the data
-        query = torch.tensor(request.query).to(torch.bfloat16)
-        key = torch.tensor(request.key).to(torch.bfloat16)
-        value = torch.tensor(request.value).to(torch.bfloat16)
+        query = torch.tensor(request.query, dtype=torch.bfloat16)
+        key = torch.tensor(request.key, dtype=torch.bfloat16)
+        value = torch.tensor(request.value, dtype=torch.bfloat16)
         
         cpu_attn_metadata = self._create_cpu_attn_metadata(
-            seq_lens_tensor=torch.tensor(request.seq_len_tensor),
+            seq_lens_tensor=torch.tensor(request.seq_len_tensor, 
+                                         dtype=torch.int32),
             max_decode_seq_len=request.max_decode_seq_len,
             num_decode_tokens=request.num_decode_tokens,
             seq_lens=request.seq_lens
@@ -332,11 +336,15 @@ class Memory_pool_engine():
             )
 
             # 2. Allocate blocks if necessary
-            assert self.block_manager.can_append_slots(
-                seq_group, num_lookahead_slots=0)
+            while not self.block_manager.has_seq(sequence):
+                continue
+            else:
+                assert self.block_manager.can_append_slots(
+                    seq_group, num_lookahead_slots=0)
             
-            self.block_manager.append_slots(
-                sequence, num_lookahead_slots=0)
+                self.block_manager.append_slots(
+                    sequence, num_lookahead_slots=0)
+
         
             # 3. Get block info and slot_mapping to attn_matadata
             block_ids = self.block_manager.get_block_table(sequence)
@@ -352,7 +360,8 @@ class Memory_pool_engine():
         
         block_tables = self._convert_list_to_tensor_padding(_block_tables)
         cpu_attn_metadata.block_tables = block_tables
-        cpu_attn_metadata.slot_mapping = torch.tensor(_slot_mapping)
+        cpu_attn_metadata.slot_mapping = torch.tensor(_slot_mapping,
+                                                      dtype=torch.int64)
 
         # 4. Attention computation
         layer = request.layer

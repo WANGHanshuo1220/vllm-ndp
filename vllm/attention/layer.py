@@ -132,6 +132,7 @@ class Attention(nn.Module):
                 seqs_data=seqs_data,
                 layer=layer
             )
+            res = res.to(dtype=torch.float16, device="cuda:0")
             return res
 
         # q, k, v are all [num_tokens, embedding_size]

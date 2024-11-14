@@ -40,7 +40,7 @@ _ENABLE_TOP_P = False
 _MAX_NUM_SAMPLES = 128
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ModelInputForTPU(ModelRunnerInputBase):
     token_ids: torch.Tensor
     position_ids: torch.Tensor

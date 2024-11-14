@@ -395,6 +395,9 @@ class Scheduler:
         # for processing and deallocation by the free_finished_seq_groups()
         self._async_stopped: List[SequenceGroup] = []
 
+        # For telling the remote pool to free seq's blocks
+        self.finished_seqs = []
+
     @property
     def next_cache_id(self):
         return (self.cache_id + 1) % self.num_cache_iters
@@ -1252,9 +1255,12 @@ class Scheduler:
         # Move to next cache (if exists)
         self.cache_id = self.next_cache_id
 
+        to_free_seqs_list = self.finished_seqs.copy()
+        self.finished_seqs.clear()
+
         # Return results
         return (seq_group_metadata_list, scheduler_outputs,
-                allow_async_output_proc)
+                allow_async_output_proc, to_free_seqs_list)
 
     def fork_seq(self, parent_seq: Sequence, child_seq: Sequence) -> None:
         self.block_manager.fork(parent_seq, child_seq)
@@ -1284,11 +1290,16 @@ class Scheduler:
 
     def free_finished_seq_groups(self) -> None:
         remaining: Deque[SequenceGroup] = deque()
+        finished_seqs = []
         for seq_group in self.running:
             self._free_finished_seq_group(seq_group)
             if not seq_group.is_finished():
                 remaining.append(seq_group)
+            else:
+                for seq in seq_group.seqs_dict.values():
+                    finished_seqs.append(seq.seq_id)
 
+        self.finished_seqs = finished_seqs
         self.running = remaining
 
         # Handle async stopped sequence groups

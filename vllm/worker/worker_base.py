@@ -120,7 +120,7 @@ class LoraNotSupportedWorkerBase(WorkerBase):
         raise ValueError(f"{type(self)} does not support LoRA")
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=False)
 class WorkerInput:
     """Local inputs to each worker. May contain device-specific data. These
     fields should be broadcastable to other workers.
@@ -312,6 +312,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             return None
 
         model_input, worker_input, kwargs = inputs
+        model_input.to_free_seq_list = execute_model_req.to_free_seqs_list
         num_steps = worker_input.num_steps
 
         self.execute_worker(worker_input)

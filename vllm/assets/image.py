@@ -9,7 +9,7 @@ from vllm.assets.base import get_vllm_public_assets
 VLM_IMAGES_DIR = "vision_model_images"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ImageAsset:
     name: Literal["stop_sign", "cherry_blossom"]
 

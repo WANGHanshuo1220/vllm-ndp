@@ -333,7 +333,8 @@ class FlashAttentionMetadata(AttentionMetadata):
             seq_start_loc=None,
             context_lens_tensor=None,
             block_tables=self.block_tables[self.num_prefills:],
-            use_cuda_graph=self.use_cuda_graph,
+            use_cuda_graph=False,
+            # use_cuda_graph=self.use_cuda_graph,
         )
         return self._cached_decode_metadata
 

@@ -44,7 +44,7 @@ _BATCH_SIZES_TO_CAPTURE = [1, 2, 4] + [
 TModelInputForXPU = TypeVar('TModelInputForXPU', bound="ModelInputForXPU")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ModelInputForXPU(ModelRunnerInputBase):
     """
     Used by the NeuronModelRunner.
@@ -78,7 +78,7 @@ class ModelInputForXPU(ModelRunnerInputBase):
         return cls(**tensor_dict)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ModelInputForXPUWithSamplingMetadata(ModelInputForXPU):
     """
     Used by the ModelRunner.

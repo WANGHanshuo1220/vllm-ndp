@@ -67,7 +67,7 @@ def video_to_pil_images_list(path: str,
     ]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class VideoAsset:
     name: Literal["sample_demo_1.mp4"]
     num_frames: int = -1

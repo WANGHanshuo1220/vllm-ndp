@@ -29,6 +29,7 @@ class StoreKVRequest(BaseModel):
     seq_id: int
     token_ids: List[int]
     tensor_data: Dict[int, List[KVCAHE_DIMENSION]]
+    to_free_seq_list: List[int]
 
 class KVTransferData:
 
@@ -37,10 +38,12 @@ class KVTransferData:
         seq_id: int,
         token_ids: List[int],
         blocks_to_tensor: Dict[int, List[torch.tensor]],
+        to_free_seq_list: List[int],
     ) -> None:
         self.seq_id = seq_id
         self.token_ids = token_ids
         self.blocks_to_tensor = blocks_to_tensor
+        self.to_free_seqs_list = to_free_seq_list
 
 class KVRequestTracker:
     """Synchronous abstraction for tracking requests."""

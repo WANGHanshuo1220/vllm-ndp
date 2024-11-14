@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 logger = init_logger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ModelInputForNeuron(ModelRunnerInputBase):
     """
     Used by the NeuronModelRunner.

@@ -158,7 +158,7 @@ class BroadcastableModelInput(ABC):
         raise NotImplementedError
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=False)
 class ModelRunnerInputBase(BroadcastableModelInput):
     """Local inputs to each worker's model runner. May contain
     device-specific data. Different worker backends may have different methods

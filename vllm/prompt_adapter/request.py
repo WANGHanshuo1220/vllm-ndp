@@ -7,7 +7,7 @@ class PromptAdapterRequest(
         msgspec.Struct,
         array_like=True,  # type: ignore[call-arg]
         omit_defaults=True,  # type: ignore[call-arg]
-        frozen=True):  # type: ignore[call-arg]
+        frozen=False):  # type: ignore[call-arg]
     """
     Request for a Prompt adapter.
     """

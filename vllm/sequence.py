@@ -1267,6 +1267,8 @@ class ExecuteModelRequest(
     last_sampled_token_ids: Optional[torch.Tensor] = None
     # Async callback
     async_callback: Optional[Callable] = None
+    # For telling the remote pool to free seq's blocks
+    to_free_seqs_list: Optional[int] = None
 
     @property
     def is_first_multi_step(self) -> bool:

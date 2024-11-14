@@ -27,7 +27,7 @@ C = TypeVar("C", bound=PretrainedConfig, default=PretrainedConfig)
 VLLM_TOKEN_ID_ARRAY_TYPE = "l"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class InputContext:
     """
     Contains information about the model which may be used to

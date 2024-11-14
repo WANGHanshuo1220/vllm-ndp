@@ -87,7 +87,7 @@ torch._dynamo.config.cache_size_limit = 128
 torch._dynamo.config.accumulated_cache_size_limit = 128
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ModelInputForGPU(ModelRunnerInputBase):
     """
     This base class contains metadata needed for the base model forward pass
@@ -140,7 +140,7 @@ class ModelInputForGPU(ModelRunnerInputBase):
         return cls(**tensor_dict)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ModelInputForGPUWithSamplingMetadata(ModelInputForGPU):
     """
     Used by the ModelRunner.
@@ -149,6 +149,9 @@ class ModelInputForGPUWithSamplingMetadata(ModelInputForGPU):
     # Used for speculative decoding. We do not broadcast it because it is only
     # used by the driver worker.
     is_prompt: Optional[bool] = None
+
+    # For telling the remote pool to free seq's blocks
+    to_free_seq_list: Optional[int] = None
 
     def as_broadcastable_tensor_dict(self) -> Dict[str, Any]:
         tensor_dict = {
@@ -1515,10 +1518,12 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         seq_id: int,
         token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]], # b_id -> tensor
+        to_free_seq_list: List[int],
     ) -> None:
         self.kv_transfer_time[seq_id] = time.time()
         logger.info(f"send {seq_id} at {time.time():.4f}")
-        self.connector.store_kv(seq_id, token_ids, to_transfer_tensor_list)
+        self.connector.store_kv(seq_id, token_ids, 
+                                to_transfer_tensor_list, to_free_seq_list)
         self.transfer_task_handlers.pop(seq_id)
         self.finished_transfer[seq_id] = True
         print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")
@@ -1526,7 +1531,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
     def _store_prefilled_kv_helper(
         self, 
         kv_caches: List[torch.tensor], # List[2, nb, bs, nh, hs]
-        seq_group_metadata_list: List[SequenceGroupMetadata]
+        seq_group_metadata_list: List[SequenceGroupMetadata],
+        to_free_seq_list: List[int]
     ) -> None:
         block_tables = {} # Dict[seq_id, List(block_ids)]
         seq_id_to_tokens = {} #  Dict[seq_id, List(token_ids)]
@@ -1550,6 +1556,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             
             task = make_async(self._store_prefilled_kv, self.store_kv_event_loop)(
                 seq_id, seq_id_to_tokens[seq_id], to_transfer_tensor_list,
+                to_free_seq_list,
             )
             self.transfer_task_handlers[seq_id] = task
 
@@ -1587,16 +1594,13 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # TODO(andoorve): We can remove this once all
         # virtual engines share the same kv cache.
         virtual_engine = model_input.virtual_engine
-        # if prefill_meta is None and decode_meta.use_cuda_graph:
-        #     assert model_input.input_tokens is not None
-        #     graph_batch_size = model_input.input_tokens.shape[0]
-        #     model_executable = self.graph_runners[virtual_engine][
-        #         graph_batch_size]
-        # else:
-        #     model_executable = self.model
-
-        # FIXME: Try to use cuda graph in this scenorio
-        model_executable = self.model
+        if prefill_meta is None and decode_meta.use_cuda_graph:
+            assert model_input.input_tokens is not None
+            graph_batch_size = model_input.input_tokens.shape[0]
+            model_executable = self.graph_runners[virtual_engine][
+                graph_batch_size]
+        else:
+            model_executable = self.model
 
         multi_modal_kwargs = model_input.multi_modal_kwargs or {}
         seqlen_agnostic_kwargs = {
@@ -1649,7 +1653,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             and model_input.seq_group_metadata_list is not None
         ):
             self._store_prefilled_kv_helper(kv_caches, 
-                                            model_input.seq_group_metadata_list)
+                                            model_input.seq_group_metadata_list,
+                                            model_input.to_free_seq_list)
         
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):

@@ -287,7 +287,7 @@ class _AsyncLLMEngine(LLMEngine):
 
             # Schedule iteration
             (seq_group_metadata_list, scheduler_outputs,
-             allow_async_output_proc
+             allow_async_output_proc, to_free_seqs_list
              ) = self.scheduler[virtual_engine].schedule()
 
             ctx.seq_group_metadata_list = seq_group_metadata_list
@@ -330,7 +330,8 @@ class _AsyncLLMEngine(LLMEngine):
                 finished_requests_ids=finished_requests_ids,
                 # We use ExecuteModelRequest to pass the last sampled_token_ids
                 # to each of the non-last PP stages for in-place prepare_input.
-                last_sampled_token_ids=last_sampled_token_ids)
+                last_sampled_token_ids=last_sampled_token_ids,
+                to_free_seqs_list=to_free_seqs_list)
 
             if allow_async_output_proc:
                 execute_model_req.async_callback = self.async_callbacks[

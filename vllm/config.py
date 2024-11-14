@@ -1867,7 +1867,7 @@ class MemPoolConfig:
 
     
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class EngineConfig:
     """Dataclass which contains all engine-related configuration. This
     simplifies passing around the distinct configurations in the codebase.

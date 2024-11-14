@@ -20,11 +20,6 @@ AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 # [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 
-class StoreKVRequest(BaseModel):
-    seq_id: int
-    token_ids: List[int]
-    tensor_data: Dict[int, List[KVCAHE_DIMENSION]]
-
 class Remote_connector():
 
     def __init__(self, config: MemPoolConfig) -> None:
@@ -69,13 +64,15 @@ class Remote_connector():
         self, 
         seq_id: int, 
         token_ids: List[int],
-        to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]]
+        to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]],
+        to_free_seq_list: List[int],
     ) -> None:
         url = self.base_url + "/store_kv"
         payload = {
             "seq_id": seq_id,
             "token_ids": token_ids,
-            "tensor_data": to_transfer_tensor_list
+            "tensor_data": to_transfer_tensor_list,
+            "to_free_seq_list": to_free_seq_list,
         }
         try:
             response = self.session.post(url, json=payload, timeout=60)

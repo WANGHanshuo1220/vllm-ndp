@@ -31,7 +31,7 @@ logger = init_logger(__name__)
 _PAD_SLOT_ID = -1
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class CPUModelInput(ModelRunnerInputBase):
     """
     Used by the CPUModelRunner.

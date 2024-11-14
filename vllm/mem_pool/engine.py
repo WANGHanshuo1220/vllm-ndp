@@ -164,8 +164,10 @@ class Memory_pool_engine():
                 f"Don't have enough workers{self.max_kv_workers-1} to serve"
                 
             futures = [self.executor.submit(
-                self.store_kv, seq.seq_id, seq.token_ids,
-                seq.blocks_to_tensor) for seq in new_requests]
+                self.store_kv, 
+                seq.seq_id, seq.token_ids,
+                seq.blocks_to_tensor, 
+                seq.to_free_seqs_list) for seq in new_requests]
             
             cf.wait(futures)
 
@@ -200,7 +202,8 @@ class Memory_pool_engine():
                 block_to_tensor.append(org_layer_tensor)
             blocks_to_tensor[block_id] = block_to_tensor
 
-        return request.seq_id, request.token_ids, blocks_to_tensor
+        return (request.seq_id, request.token_ids, 
+                blocks_to_tensor, request.to_free_seq_list)
 
     def add_kv_transfer_request(
         self, 
@@ -213,18 +216,32 @@ class Memory_pool_engine():
             self._start_kv_transfer_thread()
 
         # Preprocessing request data
-        seq_id, token_ids, blocks_to_tensor = self._preprocess_request(request)
+        (seq_id, token_ids, blocks_to_tensor, 
+         to_free_seqs_list) = self._preprocess_request(request)
 
         # Add this request to waiting queue
-        data = KVTransferData(seq_id, token_ids, blocks_to_tensor)
+        data = KVTransferData(seq_id, token_ids, 
+                              blocks_to_tensor, to_free_seqs_list)
         self.kv_transfer_request_tracker.add_request(seq_id, data)
 
     def store_kv(
         self, 
         seq_id: int, 
         token_ids: List[int],
-        blocks_to_tensor: Dict[int, List[torch.tensor]]
+        blocks_to_tensor: Dict[int, List[torch.tensor]],
+        to_free_seq_list: List[int],
     ) -> None:
+        # First free blocks of finished seqs
+        for seq_id in to_free_seq_list:
+            block_table = self.block_manager.block_tables[seq_id]
+            token_ids = block_table._get_all_token_ids()
+            sequence = Sequence(
+                seq_id=seq_id,
+                inputs={"prompt_token_ids": token_ids},
+                block_size=self.cache_config.block_size,
+            )
+            self.block_manager.free(sequence)
+
         # Create a sequence group
         sequence = Sequence(
             seq_id=seq_id,

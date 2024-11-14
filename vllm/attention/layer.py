@@ -81,9 +81,9 @@ class Attention(nn.Module):
 
         # During model initialization, the default dtype is set as the model
         # weight and activation dtype.
-        dtype = torch.get_default_dtype()
+        self.dtype = torch.get_default_dtype()
         attn_backend = get_attn_backend(num_heads, head_size, num_kv_heads,
-                                        sliding_window, dtype, kv_cache_dtype,
+                                        sliding_window, self.dtype, kv_cache_dtype,
                                         block_size, blocksparse_params
                                         is not None)
         impl_cls = attn_backend.get_impl_cls()
@@ -132,7 +132,8 @@ class Attention(nn.Module):
                 seqs_data=seqs_data,
                 layer=layer
             )
-            res = res.to(dtype=torch.float16, device="cuda:0")
+            # FIXME:if we have multiple GPUs, we should do extra work
+            res = res.to(dtype=self.dtype, device="cuda")
             return res
 
         # q, k, v are all [num_tokens, embedding_size]

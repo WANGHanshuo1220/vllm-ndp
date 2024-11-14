@@ -232,15 +232,16 @@ class Memory_pool_engine():
         to_free_seq_list: List[int],
     ) -> None:
         # First free blocks of finished seqs
-        for seq_id in to_free_seq_list:
-            block_table = self.block_manager.block_tables[seq_id]
-            token_ids = block_table._get_all_token_ids()
-            sequence = Sequence(
-                seq_id=seq_id,
-                inputs={"prompt_token_ids": token_ids},
+        for to_free_seq_id in to_free_seq_list:
+            block_table = self.block_manager.block_tables[to_free_seq_id]
+            to_free_token_ids = block_table._get_all_token_ids()
+            to_free_sequence = Sequence(
+                seq_id=to_free_seq_id,
+                inputs={"prompt_token_ids": to_free_token_ids},
                 block_size=self.cache_config.block_size,
             )
-            self.block_manager.free(sequence)
+            with self.block_manager_lock:
+                self.block_manager.free(to_free_sequence)
 
         # Create a sequence group
         sequence = Sequence(

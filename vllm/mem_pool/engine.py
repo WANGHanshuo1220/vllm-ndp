@@ -229,10 +229,10 @@ class Memory_pool_engine():
         seq_id: int, 
         token_ids: List[int],
         blocks_to_tensor: Dict[int, List[torch.tensor]],
-        to_free_seq_list: List[int],
+        to_free_seqs_list: List[int],
     ) -> None:
         # First free blocks of finished seqs
-        for to_free_seq_id in to_free_seq_list:
+        for to_free_seq_id in to_free_seqs_list:
             block_table = self.block_manager.block_tables[to_free_seq_id]
             to_free_token_ids = block_table._get_all_token_ids()
             to_free_sequence = Sequence(
@@ -265,8 +265,10 @@ class Memory_pool_engine():
                 # allocate blocks
                 self.block_manager.allocate(seq_group)
             elif can_allocate == AllocStatus.LATER:
-                # free some blocks and allocate
-                assert False, "Later exception is not implemented yet"
+                # Add this request to later queue
+                data = KVTransferData(seq_id, token_ids, 
+                                      blocks_to_tensor, to_free_seqs_list)
+                self.kv_transfer_request_tracker.add_later_request(seq_id, data)
             else:
                 assert False, "Abort exception is not implemented yet"
 

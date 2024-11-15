@@ -50,8 +50,16 @@ class KVRequestTracker:
 
     def __init__(self, max_workers: int) -> None:
         self._new_requests = queue.Queue()
+        self._later_requests = queue.Queue()
         self.all_recieved_requests = []
         self.max_workers = max_workers
+
+    def add_later_request(self, seq_id: int, content: KVTransferData) -> None:
+        """Add a request to be sent to the engine on the next background
+        loop iteration."""
+        assert seq_id in self.all_recieved_requests
+        self._later_requests.put(content)
+        logger.debug(f"Seq {seq_id} need later processing")
 
     def add_request(self, seq_id: int, content: KVTransferData) -> None:
         """Add a request to be sent to the engine on the next background
@@ -64,6 +72,11 @@ class KVRequestTracker:
         """Get the new requests and finished requests to be
         sent to the engine."""
         new_requests = []
+
+        while (not self._later_requests.empty()
+               and len(new_requests) is not self.max_workers):
+            new_request = self._later_requests.get()
+            new_requests.append(new_request)
 
         while (not self._new_requests.empty()
                and len(new_requests) is not self.max_workers):

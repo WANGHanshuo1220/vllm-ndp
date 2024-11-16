@@ -357,14 +357,15 @@ class Memory_pool_engine():
 
             # 2. Allocate blocks if necessary
             while not self.block_manager.has_seq(sequence):
+                logger.warning(f"{seq_id}'s kv cache has not been stored yet")
                 continue
             else:
-                assert self.block_manager.can_append_slots(
-                    seq_group, num_lookahead_slots=0)
+                with self.block_manager_lock:
+                    assert self.block_manager.can_append_slots(
+                        seq_group, num_lookahead_slots=0)
             
-                self.block_manager.append_slots(
-                    sequence, num_lookahead_slots=0)
-
+                    self.block_manager.append_slots(
+                        sequence, num_lookahead_slots=0)
         
             # 3. Get block info and slot_mapping to attn_matadata
             block_ids = self.block_manager.get_block_table(sequence)

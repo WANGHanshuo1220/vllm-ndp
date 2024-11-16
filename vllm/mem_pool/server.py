@@ -47,14 +47,17 @@ async def health() -> Response:
     return Response(status_code=200)
 
 @router.post("/store_kv")
-def store_kv_cache_endpoint(request: StoreKVRequest):
+async def store_kv_cache_endpoint(request: StoreKVRequest):
     global engine
-    engine.add_kv_transfer_request(request)
+    await asyncio.to_thread(
+        engine.add_kv_transfer_request, request)
 
 @router.post("/compute_attention")
-def calculate_attention_endpoint(request: AttentionComputation):
+async def calculate_attention_endpoint(request: AttentionComputation):
     global engine
-    return engine.compute_attention(request)
+    result = await asyncio.to_thread(
+        engine.compute_attention, request)
+    return result
 
 async def init_app(args):
     app = FastAPI(lifespan=lifespan)

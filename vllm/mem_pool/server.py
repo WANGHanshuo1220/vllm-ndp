@@ -58,8 +58,9 @@ async def get_kv_cache_endpoint(request: GetKVRequest) -> Response:
 @router.post("/store_kv")
 async def store_kv_cache_endpoint(request: StoreKVRequest):
     global engine
-    await asyncio.to_thread(
+    result = await asyncio.to_thread(
         engine.add_kv_transfer_request, request)
+    return result
 
 @router.post("/compute_attention")
 async def calculate_attention_endpoint(request: AttentionComputation):

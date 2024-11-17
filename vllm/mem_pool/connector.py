@@ -3,7 +3,7 @@ import json
 import os
 import torch
 import aiohttp
-from typing import Dict, List, TypeAlias, Optional, Tuple
+from typing import Dict, List, TypeAlias, Optional, Tuple, Any
 from vllm.logger import init_logger
 from vllm.config import MemPoolConfig
 import asyncio
@@ -67,7 +67,7 @@ class Remote_connector():
         token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[GPU_KVCACHE_DIMENSION]],
         to_free_seq_list: List[int],
-    ) -> Tuple[List[int], List[int]]:
+    ) -> Dict[bool, Any]:
         url = self.base_url + "/store_kv"
         payload = {
             "seq_id": seq_id,
@@ -79,13 +79,7 @@ class Remote_connector():
             response = self.session.post(url, json=payload, timeout=60)
             if response.status_code == 200:
                 data = response.json()
-                has_delta = data.get("has_result")
-                if has_delta:
-                    add_delta = data.get("add_delta")
-                    pop_delta = data.get("pop_delta")
-                    return add_delta, pop_delta
-                else:
-                    return None
+                return data
         except Exception as e:
             print(f"Error: {e}")
     

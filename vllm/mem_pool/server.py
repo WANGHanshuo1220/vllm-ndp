@@ -6,7 +6,7 @@ import signal
 import time
 
 from fastapi import APIRouter, FastAPI
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 from typing_extensions import assert_never
 from vllm.entrypoints.launcher import serve_http
@@ -17,7 +17,8 @@ from typing import Dict, List, TypeAlias
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.mem_pool.engine import Memory_pool_engine
-from vllm.mem_pool.util import StoreKVRequest, AttentionComputation
+from vllm.mem_pool.util import (StoreKVRequest, 
+                                AttentionComputation, GetKVRequest)
 import torch
 
 router = APIRouter()
@@ -45,6 +46,14 @@ async def health() -> Response:
     """Health check."""
     print("check health")
     return Response(status_code=200)
+
+@router.get("/get_kv")
+async def get_kv_cache_endpoint(request: GetKVRequest) -> Response:
+    """Get kv cache from pool"""
+    global engine
+    result = await asyncio.to_thread(
+        engine.get_kv, request)
+    return result
 
 @router.post("/store_kv")
 async def store_kv_cache_endpoint(request: StoreKVRequest):

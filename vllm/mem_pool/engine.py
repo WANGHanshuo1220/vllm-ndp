@@ -22,13 +22,16 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
 from vllm.mem_pool.util import (KVRequestTracker, KVTransferData, 
-                                StoreKVRequest, AttentionComputation)
+                                StoreKVRequest, AttentionComputation,
+                                GetKVRequest, CPU_KVCACHE_DIMENSION)
 from vllm.mem_pool.radix_tree_cache import RadixCache
 from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 import threading
 import concurrent.futures as cf
 
 logger = init_logger(__name__)
+
+SEND_DELTA_TIME = 0.1
 
 class Memory_pool_engine():
 
@@ -64,8 +67,9 @@ class Memory_pool_engine():
         self.executor = cf.ThreadPoolExecutor(max_workers=self.max_kv_workers)
         self.block_manager_lock = threading.Lock()
 
-        # self.attention_running_loop = False
-        # self.attention_request_tracke:
+        self.send_delta = False
+        self.last_cache_delta_send_time = 0.0
+        self.time_lock = threading.Lock()
     
     def __del__(self):
         if self.executor is not None:
@@ -142,12 +146,6 @@ class Memory_pool_engine():
 
     """ Below are class network interfaces """
 
-    def _can_allocate(self, seq_group) -> bool:
-        return self.block_manager.can_allocate(seq_group)
-
-    def _allocate(self) -> None:
-        pass
-
     def _update_radix_tree(
         self,
         token_ids: List[int],
@@ -205,6 +203,21 @@ class Memory_pool_engine():
         return (request.seq_id, request.token_ids, 
                 blocks_to_tensor, request.to_free_seq_list)
 
+    def _pass_daley(self, now: float) -> bool:
+        res = False
+
+        if self.time_lock.acquire(blocking=False):
+            if not self.send_delta:
+                self.send_delta = True
+                self.last_cache_delta_send_time = now
+                return True
+
+            res = (now - self.last_cache_delta_send_time) > SEND_DELTA_TIME
+            if res:
+                self.last_cache_delta_send_time = now
+        
+        return res
+
     def add_kv_transfer_request(
         self, 
         request: StoreKVRequest
@@ -223,6 +236,15 @@ class Memory_pool_engine():
         data = KVTransferData(seq_id, token_ids, 
                               blocks_to_tensor, to_free_seqs_list)
         self.kv_transfer_request_tracker.add_request(seq_id, data)
+        
+        if self._pass_daley(time.time()):
+            with self.block_manager_lock:
+                add_delta, pop_delta = self.block_manager.get_cached_blocks_delta()
+            return {"has_result": True, 
+                    "add_delta": add_delta, 
+                    "pop_delta": pop_delta} 
+        else:
+            return {"has_result": False} 
 
     def store_kv(
         self, 
@@ -258,7 +280,7 @@ class Memory_pool_engine():
         # NOTE: Here need lock for multi-processing safety
         with self.block_manager_lock:
             # 1. Check if we can allocate blocks for this seq
-            can_allocate = self._can_allocate(seq_group)
+            can_allocate = self.block_manager.can_allocate(seq_group)
 
             # 2. Allocate if we can and free some blocks if neccessary
             if can_allocate == AllocStatus.OK:
@@ -391,3 +413,29 @@ class Memory_pool_engine():
                                      cpu_attn_metadata)
         return {"result": output.tolist()}
         
+    def get_kv(
+        self, 
+        request: GetKVRequest
+    ) -> dict[int, list[CPU_KVCACHE_DIMENSION]]:
+        required_block_hashes = request.cached_hashes
+        blocks_to_kv: dict[int, List[CPU_KVCACHE_DIMENSION]] = {}
+
+        # Get block_hash related block isd
+        with self.block_manager_lock:
+            block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
+
+        # Get corresponding kv tensors
+        for block_id in block_ids:
+            for layer_i in len(self.cache_enigne.cpu_cache):
+                layer_tensor = self.cache_enigne.cpu_cache[layer_i][:,block_id,:].copy()
+                blocks_to_kv[block_ids].append(layer_tensor.tolist())
+        
+        with self.block_manager_lock:
+            _block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
+
+        if block_ids != _block_ids:
+            diff = list(set(block_ids) - set(_block_ids))
+            for block_id in diff:
+                blocks_to_kv.pop(block_id)
+        
+        return {"kv": blocks_to_kv}

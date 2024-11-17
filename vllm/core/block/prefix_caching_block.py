@@ -73,6 +73,10 @@ class PrefixCachingBlockAllocator(BlockAllocator):
         # prefix hash will be in this dict, even if they have refcount 0.
         self._cached_blocks: Dict[PrefixHash, BlockId] = {}
 
+        # For memory pool cached block delta
+        self._cached_blocks_add_delta: List[PrefixHash] = []
+        self._cached_blocks_pop_delta: List[PrefixHash] = []
+
         # A list of immutable block IDs that have been touched by scheduler
         # and should be marked as computed after an entire batch of sequences
         # are scheduled.
@@ -317,6 +321,7 @@ class PrefixCachingBlockAllocator(BlockAllocator):
         assert _block_id == block_id
 
         self._cached_blocks.pop(content_hash_to_evict)
+        self._cached_blocks_pop_delta.append(content_hash_to_evict)
 
         self._refcounter.incr(block_id)
         self._track_block_id(block_id, computed=False)
@@ -452,6 +457,7 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             # because other sequences in the same batch cannot reuse
             # this block.
             self._cached_blocks[block.content_hash] = block.block_id
+            self._cached_blocks_add_delta.append(block.content_hash)
             # Mark this block as touched so that it can be marked as
             # computed after the entire batch of sequences are scheduled.
             self._touched_blocks.add(block.block_id)
@@ -651,6 +657,22 @@ class PrefixCachingBlockAllocator(BlockAllocator):
 
             block.block_id = block_id  # Assign block_id
 
+    def get_cached_blocks_delta(self) -> Tuple[List[int], List[int]]:
+        add_delta = self._cached_blocks_add_delta.copy()
+        pop_delta = self._cached_blocks_pop_delta.copy()
+        self._cached_blocks_add_delta.clear()
+        self._cached_blocks_pop_delta.clear()
+        return (add_delta, pop_delta)
+
+    def get_block_ids_from_hash(self, hashes: List[PrefixHash]) -> List[int]:
+        block_ids = []
+        for hash in hashes:
+            if hash in self._cached_blocks:
+                block_ids.append(self._cached_blocks[hash])
+            else:
+                break
+        
+        return block_ids
 
 class PrefixCachingBlock(Block):
     """A block implementation that supports prefix caching.

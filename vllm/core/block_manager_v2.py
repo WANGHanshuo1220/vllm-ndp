@@ -109,6 +109,12 @@ class BlockSpaceManagerV2(BlockSpaceManager):
 
     def has_seq(self, seq: Sequence) -> bool:
         return (seq.seq_id in self.block_tables)
+    
+    def get_cached_blocks_delta(self) -> Tuple[List[int], List[int]]:
+        return self.block_allocator.get_cached_blocks_delta()
+
+    def get_block_ids_from_hash(self, hashes: List[int]) -> List[int]:
+        return self.block_allocator.get_block_ids_from_hash(hashes)
 
     def can_allocate(self, seq_group: SequenceGroup) -> AllocStatus:
         # FIXME(woosuk): Here we assume that all sequences in the group share

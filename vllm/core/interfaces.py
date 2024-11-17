@@ -123,3 +123,11 @@ class BlockSpaceManager(ABC):
     def get_prefix_cache_hit_rate(self, device: Device) -> float:
         """Prefix cache hit rate. -1 means not supported or disabled."""
         pass
+
+    @abstractmethod
+    def get_cached_blocks_delta(self) -> Tuple[List[int], List[int]]:
+        pass
+
+    @abstractmethod
+    def get_block_ids_from_hash(self, hashes: List[int]) -> List[int]:
+        pass

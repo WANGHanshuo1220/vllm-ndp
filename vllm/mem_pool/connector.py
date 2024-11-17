@@ -3,7 +3,7 @@ import json
 import os
 import torch
 import aiohttp
-from typing import Dict, List, TypeAlias, Optional
+from typing import Dict, List, TypeAlias, Optional, Tuple
 from vllm.logger import init_logger
 from vllm.config import MemPoolConfig
 import asyncio
@@ -12,6 +12,7 @@ import time
 import requests
 
 from vllm.attention import AttentionMetadata, AttentionType
+from vllm.mem_pool.util import GPU_KVCACHE_DIMENSION, CPU_KVCACHE_DIMENSION
 
 logger = init_logger(__name__)
 
@@ -64,9 +65,9 @@ class Remote_connector():
         self, 
         seq_id: int, 
         token_ids: List[int],
-        to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]],
+        to_transfer_tensor_list: Dict[int, List[GPU_KVCACHE_DIMENSION]],
         to_free_seq_list: List[int],
-    ) -> None:
+    ) -> Tuple[List[int], List[int]]:
         url = self.base_url + "/store_kv"
         payload = {
             "seq_id": seq_id,
@@ -77,10 +78,33 @@ class Remote_connector():
         try:
             response = self.session.post(url, json=payload, timeout=60)
             if response.status_code == 200:
-                pass
+                data = response.json()
+                has_delta = data.get("has_result")
+                if has_delta:
+                    add_delta = data.get("add_delta")
+                    pop_delta = data.get("pop_delta")
+                    return add_delta, pop_delta
+                else:
+                    return None
         except Exception as e:
             print(f"Error: {e}")
     
+    def get_kv(
+        self,
+        block_hashes: List[int],
+    ) -> dict[int, list[CPU_KVCACHE_DIMENSION]]:
+        url = self.base_url + "/get_kv"
+        payload = {
+            "cached_hashes": block_hashes,
+        }
+        try:
+            response = self.session.get(url, json=payload, timeout=60)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("kv")
+        except Exception as e:
+            print(f"Error: {e}")
+
     async def dummy_call(self):
         async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:
             try:

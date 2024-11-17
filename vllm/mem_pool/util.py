@@ -9,7 +9,11 @@ from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 logger = init_logger(__name__)
 
 # [2, block_size, num_kv_heads, head_size]
-KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
+GPU_KVCACHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
+
+# [2, block_size * num_kv_heads * head_size]
+CPU_KVCACHE_DIMENSION: TypeAlias = List[List[float]]
+PrefixHash = int
 
 # [num_tokens, token_embedding]
 QKV_DIMENSION: TypeAlias = List[List[float]]
@@ -28,8 +32,11 @@ class AttentionComputation(BaseModel):
 class StoreKVRequest(BaseModel):
     seq_id: int
     token_ids: List[int]
-    tensor_data: Dict[int, List[KVCAHE_DIMENSION]]
+    tensor_data: Dict[int, List[GPU_KVCACHE_DIMENSION]]
     to_free_seq_list: List[int]
+
+class GetKVRequest(BaseModel):
+    cached_hashes: List[PrefixHash]
 
 class KVTransferData:
 

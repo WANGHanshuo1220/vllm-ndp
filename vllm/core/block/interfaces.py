@@ -205,6 +205,16 @@ class BlockAllocator(ABC):
         """Prefix cache hit rate. -1 means not supported or disabled."""
         pass
 
+    @abstractmethod
+    def get_cached_blocks_delta(self, device: Device) -> Tuple[List[int], List[int]]:
+        """Get delta cached blocks' hash values"""
+        pass
+
+    @abstractmethod
+    def get_block_ids_from_hash(self, hashes: List[int]) -> List[int]:
+        """Get block ids from cached hashes"""
+        pass
+
     class NoFreeBlocksError(ValueError):
         pass
 
@@ -301,4 +311,14 @@ class DeviceAwareBlockAllocator(ABC):
     @abstractmethod
     def get_prefix_cache_hit_rate(self, device: Device) -> float:
         """Prefix cache hit rate. -1 means not supported or disabled."""
+        pass
+
+    @abstractmethod
+    def get_cached_blocks_delta(self, device: Device) -> Tuple[List[int], List[int]]:
+        """Get delta cached blocks' hash values"""
+        pass
+
+    @abstractmethod
+    def get_block_ids_from_hash(self, hashes: List[int]) -> List[int]:
+        """Get block ids from cached hashes"""
         pass

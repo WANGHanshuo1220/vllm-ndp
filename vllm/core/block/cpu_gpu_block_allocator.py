@@ -340,6 +340,18 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         self._swap_mapping.clear()
         return list(mapping.items())
 
+    def get_cached_blocks_delta(
+        self, 
+        device: Device = Device.GPU
+    ) -> Tuple[List[int], List[int]]:
+        return self._allocators[device].get_cached_blocks_delta()
+    
+    def get_block_ids_from_hash(
+        self, 
+        hashes: List[int],
+        device: Device = Device.GPU
+    ) -> List[int]:
+        return self._allocators[device].get_block_ids_from_hash(hashes)
 
 class NullBlock(Block):
     """

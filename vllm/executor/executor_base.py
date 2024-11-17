@@ -9,7 +9,7 @@ from vllm.lora.request import LoRARequest
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sequence import ExecuteModelRequest
-
+import torch
 
 class ExecutorBase(ABC):
     """Base class for all executors.
@@ -132,6 +132,14 @@ class ExecutorBase(ABC):
     def __del__(self):
         self.shutdown()
 
+    @abstractmethod
+    def save_kv_cache(
+        self, 
+        block_id: int,
+        layer_i: int, 
+        kv_layer: torch.tensor
+    ) -> None:
+        raise NotImplementedError
 
 class ExecutorAsyncBase(ExecutorBase):
 

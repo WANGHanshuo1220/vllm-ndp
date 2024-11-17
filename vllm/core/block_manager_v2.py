@@ -111,10 +111,16 @@ class BlockSpaceManagerV2(BlockSpaceManager):
         return (seq.seq_id in self.block_tables)
     
     def get_cached_blocks_delta(self) -> Tuple[List[int], List[int]]:
+        """This function is only used in CPU memory pool"""
         return self.block_allocator.get_cached_blocks_delta()
 
     def get_block_ids_from_hash(self, hashes: List[int]) -> List[int]:
+        """This function is only used in CPU memory pool"""
         return self.block_allocator.get_block_ids_from_hash(hashes)
+
+    def get_block_table_hash(self, seq: Sequence) -> List[int]:
+        blocks_hash = self.block_tables[seq.seq_id].blocks_hash
+        return blocks_hash
 
     def can_allocate(self, seq_group: SequenceGroup) -> AllocStatus:
         # FIXME(woosuk): Here we assume that all sequences in the group share

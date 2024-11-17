@@ -26,6 +26,7 @@ from vllm.sampling_params import SamplingParams
 from vllm.sequence import ExecuteModelRequest
 from vllm.transformers_utils.tokenizer import AnyTokenizer
 from vllm.usage.usage_lib import UsageContext
+from vllm.utils import make_async
 
 logger = init_logger(__name__)
 ENGINE_ITERATION_TIMEOUT_S = envs.VLLM_ENGINE_ITERATION_TIMEOUT_S
@@ -290,6 +291,14 @@ class _AsyncLLMEngine(LLMEngine):
              allow_async_output_proc, to_free_seqs_list
              ) = self.scheduler[virtual_engine].schedule()
 
+            if (self.mem_pool_config is not None
+                and seq_group_metadata_list is not None
+                and scheduler_outputs.num_prefill_groups > 0
+            ):
+                assert self.connector is not None
+                await make_async(self.fetch_kv_from_remote_pool)(
+                    seq_group_metadata_list=seq_group_metadata_list)
+
             ctx.seq_group_metadata_list = seq_group_metadata_list
             ctx.scheduler_outputs = scheduler_outputs
 
@@ -338,8 +347,9 @@ class _AsyncLLMEngine(LLMEngine):
                     virtual_engine]
 
             # Execute the model.
-            outputs = await self.model_executor.execute_model_async(
-                execute_model_req)
+            outputs, add_delta, pop_delta = \
+                await self.model_executor.execute_model_async(
+                    execute_model_req)
 
             # we need to do this here so that last step's sampled_token_ids can
             # be passed to the next iteration for PP.

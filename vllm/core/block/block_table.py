@@ -238,6 +238,10 @@ class BlockTable:
         return self._blocks.ids()
 
     @property
+    def blocks_hash(self) -> List[int]:
+        return self._blocks.hashes()
+
+    @property
     def physical_block_ids_reusable(self) -> List[bool]:
         reusable = []
         for block in self._blocks.list():

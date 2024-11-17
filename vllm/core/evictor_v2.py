@@ -82,6 +82,9 @@ class LRUEvictor(Evictor):
         return block_id in self.free_table
 
     def evict(self) -> Tuple[int, int]:
+        """Evict from evictor, which means we don't have enough kv cache space.
+        The evicted block will NOT be reused and will serve as an empty block
+        """
         if len(self.free_table) == 0:
             raise ValueError("No usable cache memory left")
 
@@ -114,6 +117,7 @@ class LRUEvictor(Evictor):
         self.free_table[block_id].last_accessed = last_accessed
 
     def remove(self, block_id: int):
+        """Remove from evictor, which means this block will be reused"""
         if block_id not in self.free_table:
             raise ValueError(
                 "Attempting to remove block that's not in the evictor")

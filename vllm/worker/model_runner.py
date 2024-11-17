@@ -58,6 +58,7 @@ from vllm.worker.model_runner_base import (
 import asyncio
 from vllm.mem_pool.connector import Remote_connector
 from vllm.utils import make_async
+import threading        
 
 # [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
@@ -1014,6 +1015,11 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         if self.mem_pool_config is not None:
             self.store_kv_event_loop = asyncio.get_event_loop()
             self.connector = Remote_connector(self.mem_pool_config)
+        
+        # Delta cached blocks in memory pool
+        self.add_delta: List[int] = []
+        self.pop_delta: List[int] = []
+        self.delta_lock = threading.Lock()
 
     def load_model(self) -> None:
         logger.info("Starting to load model %s...", self.model_config.model)
@@ -1522,8 +1528,12 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
     ) -> None:
         self.kv_transfer_time[seq_id] = time.time()
         logger.info(f"send {seq_id} at {time.time():.4f}")
-        self.connector.store_kv(seq_id, token_ids, 
-                                to_transfer_tensor_list, to_free_seq_list)
+        response = self.connector.store_kv(seq_id, token_ids, 
+                                           to_transfer_tensor_list, to_free_seq_list)
+        if response["has_result"]:
+            with self.delta_lock:
+                self.add_delta.extend(response["add_delta"])
+                self.pop_delta.extend(response["pop_delta"])
         self.transfer_task_handlers.pop(seq_id)
         self.finished_transfer[seq_id] = True
         print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")
@@ -1571,7 +1581,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         kv_caches: List[torch.Tensor],
         intermediate_tensors: Optional[IntermediateTensors] = None,
         num_steps: int = 1,
-    ) -> Optional[Union[List[SamplerOutput], IntermediateTensors]]:
+    ) -> Tuple[Optional[Union[List[SamplerOutput], IntermediateTensors]], 
+               Optional[List[int]],
+               Optional[List[int]]]:
         if num_steps > 1:
             raise ValueError("num_steps > 1 is not supported in ModelRunner")
 
@@ -1728,7 +1740,20 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
             output.hidden_states = hidden_states
 
-        return [output]
+        _add_delta: List[int] = []
+        _pop_delta: List[int] = []
+        
+        if (self.mem_pool_config is not None 
+            and model_input.attn_metadata.num_prefills > 0 
+            and model_input.seq_group_metadata_list is not None
+        ):
+            with self.delta_lock:
+                _add_delta = self.add_delta.copy()
+                _pop_delta = self.pop_delta.copy()
+                self.add_delta.clear()
+                self.pop_delta.clear()
+
+        return [output], _add_delta, _pop_delta
 
 
 class CUDAGraphRunner:

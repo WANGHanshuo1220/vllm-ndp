@@ -54,6 +54,9 @@ from vllm.usage.usage_lib import (UsageContext, is_usage_stats_enabled,
 from vllm.utils import Counter, Device
 from vllm.version import __version__ as VLLM_VERSION
 
+from vllm.mem_pool.connector import Remote_connector
+from vllm.mem_pool.util import CPU_KVCACHE_DIMENSION
+
 logger = init_logger(__name__)
 _LOCAL_LOGGING_INTERVAL_SEC = 5
 
@@ -403,7 +406,8 @@ class LLMEngine:
                 scheduler_config, cache_config, lora_config,
                 parallel_config.pipeline_parallel_size,
                 self.async_callbacks[v_id]
-                if model_config.use_async_output_proc else None)
+                if model_config.use_async_output_proc else None,
+                mem_pool_config=self.mem_pool_config)
             for v_id in range(parallel_config.pipeline_parallel_size)
         ]
 
@@ -452,6 +456,12 @@ class LLMEngine:
                     get_tokenizer_for_seq,
                 ),
             ))
+
+        
+        # For remote memory pool
+        self.connector = None
+        if self.mem_pool_config is not None:
+            self.connector = Remote_connector(self.mem_pool_config)
 
     def _initialize_kv_caches(self) -> None:
         """Initialize the KV cache in the worker(s).
@@ -1178,6 +1188,13 @@ class LLMEngine:
              allow_async_output_proc, to_free_seqs_list
              ) = self.scheduler[virtual_engine].schedule()
 
+            if (self.mem_pool_config is not None
+                and seq_group_metadata_list is not None
+                and scheduler_outputs.num_prefill_groups > 0
+            ):
+                assert self.connector is not None
+                self.fetch_kv_from_remote_pool(seq_group_metadata_list)
+
             ctx.seq_group_metadata_list = seq_group_metadata_list
             ctx.scheduler_outputs = scheduler_outputs
 
@@ -1224,8 +1241,12 @@ class LLMEngine:
                 execute_model_req.async_callback = self.async_callbacks[
                     virtual_engine]
 
-            outputs = self.model_executor.execute_model(
-                execute_model_req=execute_model_req)
+            outputs, add_delta, pop_delta = \
+                self.model_executor.execute_model(
+                    execute_model_req=execute_model_req)
+            
+            if self.mem_pool_config is not None:
+                self.scheduler[virtual_engine].update_delta(add_delta, pop_delta)
 
             # We need to do this here so that last step's sampled_token_ids can
             # be passed to the next iteration for PP.
@@ -1719,3 +1740,43 @@ class LLMEngine:
             # TODO: Find out how many placeholder tokens are there so we can
             # check that chunked prefill does not truncate them
             # max_batch_len = self.scheduler_config.max_num_batched_tokens
+
+    def fetch_kv_from_remote_pool(
+        self, 
+        seq_group_metadata_list: List[SequenceGroupMetadata]
+    ) -> None:
+        blocks_id = []
+        blocks_hash = []
+        for sg_metadata in seq_group_metadata_list:
+            blocks_id.extend(list(sg_metadata.remote_cache.keys()))
+            blocks_hash.extend(list(sg_metadata.remote_cache.values()))
+
+        response = self.connector.get_kv(blocks_hash=blocks_hash)
+        blocks_to_kv = response["kv"]
+
+        dtype = self.model_config.dtype
+        device = self.device_config.device_type
+        shape = (2, self.cache_config.block_size,
+                 self.model_config.get_num_attention_heads(),
+                 self.model_config.get_head_size())
+        for i, block_id in enumerate(blocks_id):
+            if blocks_hash[i] not in blocks_to_kv:
+                # Local hash cache of memory pool is out-of-date
+                continue
+            else:
+                kv: List[CPU_KVCACHE_DIMENSION] = \
+                    blocks_to_kv[blocks_hash[i]]
+                
+                for layer_i, data in enumerate(kv):
+                    kv_layer = torch.tensor(data,
+                                            dtype=dtype,
+                                            device=device)
+                    kv_layer.reshape(shape=shape)
+                    self.model_executor.save_kv_cache(
+                        block_id, layer_i, kv_layer
+                    )
+
+        for sg_metadata in seq_group_metadata_list:
+            for block_id, block_hash in sg_metadata.remote_cache.items():
+                if block_hash in blocks_to_kv:
+                    sg_metadata.computed_block_nums.append(block_id)

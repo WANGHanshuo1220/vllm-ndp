@@ -85,11 +85,11 @@ class Remote_connector():
     
     def get_kv(
         self,
-        block_hashes: List[int],
+        blocks_hash: List[int],
     ) -> dict[int, list[CPU_KVCACHE_DIMENSION]]:
         url = self.base_url + "/get_kv"
         payload = {
-            "cached_hashes": block_hashes,
+            "cached_hashes": blocks_hash,
         }
         try:
             response = self.session.get(url, json=payload, timeout=60)

@@ -281,7 +281,14 @@ class BlockList:
 
     def ids(self) -> List[int]:
         return self._block_ids
-
+    
+    def hashes(self) -> List[int]:
+        hashes = []
+        for block in self._blocks:
+            hash = block.content_hash
+            if hash is not None:
+                hashes.append(block.content_hash)
+        return hashes
 
 @dataclass
 class CacheMetricData:

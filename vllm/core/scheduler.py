@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import (Callable, Deque, Dict, Iterable, List, Optional, Set,
                     Tuple, Union)
 
-from vllm.config import CacheConfig, LoRAConfig, SchedulerConfig
+from vllm.config import CacheConfig, LoRAConfig, SchedulerConfig, MemPoolConfig
 from vllm.core.interfaces import AllocStatus, BlockSpaceManager
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
@@ -303,6 +303,7 @@ class Scheduler:
         lora_config: Optional[LoRAConfig],
         pipeline_parallel_size: int = 1,
         output_proc_callback: Optional[Callable] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ) -> None:
         self.scheduler_config = scheduler_config
         self.cache_config = cache_config
@@ -310,6 +311,7 @@ class Scheduler:
         # simple and NOT fair. It can lead to starvation of some
         # LoRAs. This should be improved in the future.
         self.lora_config = lora_config
+        self.mem_pool_config = mem_pool_config
 
         version = "v1"
         if self.scheduler_config.use_v2_block_manager:
@@ -397,6 +399,9 @@ class Scheduler:
 
         # For telling the remote pool to free seq's blocks
         self.finished_seqs = []
+        
+        # Delta block cache
+        self.remote_pool_block_hashes = []
 
     @property
     def next_cache_id(self):
@@ -1163,6 +1168,22 @@ class Scheduler:
                 common_computed_block_nums = (
                     self.block_manager.get_common_computed_block_ids(
                         seq_group.get_seqs(status=SequenceStatus.RUNNING)))
+            
+            remote_cache = {} # block_id -> content_hash
+            if self.mem_pool_config is not None:
+                seqs_running = seq_group.get_seqs(status=SequenceStatus.RUNNING)
+                assert(len(seqs_running) == 1)
+
+                seq = seqs_running[0]
+                seq_blocks_hash = self.block_manager.get_block_table_hash(seq)
+                seq_blocks_id = self.block_manager.get_block_table(seq)
+                assert len(seq_blocks_hash) >= len(common_computed_block_nums)
+
+                for i in range(len(common_computed_block_nums), 
+                               len(seq_blocks_hash)):
+                    hash = seq_blocks_hash[i]
+                    if hash in self.remote_pool_block_hashes:
+                        remote_cache[seq_blocks_id[i]] = seq_blocks_hash[i]
 
             do_sample = True
             is_prompt = seq_group.is_prefill()
@@ -1208,6 +1229,7 @@ class Scheduler:
                     multi_modal_data=seq_group.multi_modal_data
                     if scheduler_outputs.num_prefill_groups > 0 else None,
                     prompt_adapter_request=seq_group.prompt_adapter_request,
+                    remote_cache=remote_cache,
                 )
             else:
                 # When SPMD mode is enabled, we only send delta data except for
@@ -1505,3 +1527,12 @@ class Scheduler:
             else:
                 num_new_tokens = min(num_new_tokens, remaining_token_budget)
         return num_new_tokens
+
+    def update_delta(self, add_delta: List[int], pop_delta: List[int]) -> None:
+        for hash in add_delta:
+            assert hash not in self.remote_pool_block_hashes
+            self.remote_pool_block_hashes.append(hash)
+        
+        for hash in pop_delta:
+            assert hash in self.remote_pool_block_hashes
+            self.remote_pool_block_hashes.pop(hash)

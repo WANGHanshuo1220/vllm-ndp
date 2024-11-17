@@ -418,6 +418,8 @@ class Memory_pool_engine():
         request: GetKVRequest
     ) -> dict[int, list[CPU_KVCACHE_DIMENSION]]:
         required_block_hashes = request.cached_hashes
+
+        # content_hash -> kv_cache
         blocks_to_kv: dict[int, List[CPU_KVCACHE_DIMENSION]] = {}
 
         # Get block_hash related block isd
@@ -425,17 +427,18 @@ class Memory_pool_engine():
             block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
 
         # Get corresponding kv tensors
-        for block_id in block_ids:
+        for i, block_id in enumerate(block_ids):
             for layer_i in len(self.cache_enigne.cpu_cache):
                 layer_tensor = self.cache_enigne.cpu_cache[layer_i][:,block_id,:].copy()
-                blocks_to_kv[block_ids].append(layer_tensor.tolist())
+                blocks_to_kv[required_block_hashes[i]].append(layer_tensor.tolist())
         
         with self.block_manager_lock:
             _block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
 
         if block_ids != _block_ids:
-            diff = list(set(block_ids) - set(_block_ids))
-            for block_id in diff:
-                blocks_to_kv.pop(block_id)
+            for i in range(len(_block_ids), len(block_ids)):
+                blocks_to_kv.pop(required_block_hashes[i])
+        
+        assert len(blocks_to_kv) == len(_block_ids)
         
         return {"kv": blocks_to_kv}

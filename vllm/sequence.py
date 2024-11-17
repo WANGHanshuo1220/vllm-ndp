@@ -951,6 +951,9 @@ class SequenceGroupMetadata(
     # TODO: We should maintain this states out of the sequence group.
     num_speculative_tokens: Optional[int] = None
 
+    # For remote cache, e.g., local physical_block_id -> block.content_hash
+    remote_cache: Optional[Dict[int, int]] = None
+
     def __post_init__(self):
         if self.seq_data is not None and self.token_chunk_size is None:
             if self.is_prompt:

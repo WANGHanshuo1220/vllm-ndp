@@ -9,6 +9,7 @@ from vllm.sequence import ExecuteModelRequest, PoolerOutput
 from vllm.utils import (get_distributed_init_method, get_ip, get_open_port,
                         make_async)
 from vllm.worker.worker_base import WorkerBase, WorkerWrapperBase
+import torch
 
 logger = init_logger(__name__)
 
@@ -127,9 +128,11 @@ class GPUExecutor(ExecutorBase):
 
     def execute_model(
         self, execute_model_req: ExecuteModelRequest
-    ) -> Optional[List[Union[SamplerOutput, PoolerOutput]]]:
-        output = self.driver_worker.execute_model(execute_model_req)
-        return output
+    ) -> Tuple[Optional[List[Union[SamplerOutput, PoolerOutput]]],
+               Optional[List[int]],
+               Optional[List[int]]]:
+        output, add_delta, pop_delta = self.driver_worker.execute_model(execute_model_req)
+        return output, add_delta, pop_delta
 
     def add_lora(self, lora_request: LoRARequest) -> bool:
         assert lora_request.lora_int_id > 0, "lora_id must be greater than 0."
@@ -176,13 +179,22 @@ class GPUExecutor(ExecutorBase):
     def stop_profile(self) -> None:
         self.driver_worker.stop_profile()
 
+    def save_kv_cache(
+        self, 
+        block_id: int,
+        layer_i: int, 
+        kv_layer: torch.tensor
+    ) -> None:
+        self.driver_worker.save_kv_cache(block_id, layer_i, kv_layer)
 
 class GPUExecutorAsync(GPUExecutor, ExecutorAsyncBase):
 
     async def execute_model_async(
         self,
         execute_model_req: ExecuteModelRequest,
-    ) -> List[Union[SamplerOutput, PoolerOutput]]:
-        output = await make_async(self.driver_worker.execute_model
-                                  )(execute_model_req=execute_model_req)
-        return output
+    ) -> Tuple[List[Union[SamplerOutput, PoolerOutput]],
+               Optional[List[int]],
+               Optional[List[int]]]:
+        output, add_delta, pop_delta = await make_async(self.driver_worker.execute_model
+                                                        )(execute_model_req=execute_model_req)
+        return output, add_delta, pop_delta

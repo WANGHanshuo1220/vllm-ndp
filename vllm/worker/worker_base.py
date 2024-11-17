@@ -100,6 +100,14 @@ class WorkerBase(ABC):
     def list_loras(self) -> Set[int]:
         raise NotImplementedError
 
+    @abstractmethod
+    def save_kv_cache(
+        self, 
+        block_id: int,
+        layer_i: int, 
+        kv_layer: torch.tensor
+    ) -> None:
+        raise NotImplementedError
 
 class LoraNotSupportedWorkerBase(WorkerBase):
     """Partial implementation of WorkerBase that raises exceptions when LoRA
@@ -300,7 +308,9 @@ class LocalOrDistributedWorkerBase(WorkerBase):
     def execute_model(
         self,
         execute_model_req: Optional[ExecuteModelRequest] = None,
-    ) -> Optional[List[SamplerOutput]]:
+    ) -> Tuple[Optional[List[SamplerOutput]],
+               Optional[List[int]],
+               Optional[list[int]]]:
         """Executes at least one model step on the given sequences, unless no
         sequences are provided."""
         # import asyncio
@@ -332,7 +342,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                 orig_model_execute_time = intermediate_tensors.tensors.get(
                     "model_execute_time", torch.tensor(0)).item()
 
-        output = self.model_runner.execute_model(
+        output, add_delta, pop_delta = self.model_runner.execute_model(
             model_input=model_input,
             kv_caches=self.kv_cache[worker_input.virtual_engine]
             if self.kv_cache is not None else None,
@@ -359,7 +369,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                                         model_execute_time)
 
         # output is List[SamplerOutput]
-        return output
+        return output, add_delta, pop_delta
 
     def _execute_model_spmd(
         self,
@@ -396,6 +406,13 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             **kwargs,
         )
 
+    def save_kv_cache(
+        self, 
+        block_id: int,
+        layer_i: int, 
+        kv_layer: torch.tensor
+    ) -> None:
+        self.kv_cache[layer_i][:,block_id,:,:,:] = kv_layer
 
 class WorkerWrapperBase:
     """

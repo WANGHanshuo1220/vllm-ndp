@@ -82,6 +82,7 @@ async def serve_http(app: FastAPI, **uvicorn_kwargs) -> None:
     loop = asyncio.get_running_loop()
 
     server_task = loop.create_task(server.serve())
+    print("Server start successfully")
 
     def signal_handler() -> None:
         # prevents the uvicorn signal handler to exit early
@@ -112,6 +113,7 @@ async def run_server(args, **uvicorn_kwargs) -> None:
         app,
         host=args.mp_host,
         port=args.mp_port,
+        log_level="error",
         **uvicorn_kwargs,
     )
 

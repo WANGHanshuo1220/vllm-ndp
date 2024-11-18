@@ -204,6 +204,7 @@ class Memory_pool_engine():
                 blocks_to_tensor, request.to_free_seq_list)
 
     def _pass_daley(self, now: float) -> bool:
+        return True
         res = False
 
         if self.time_lock.acquire(blocking=False):

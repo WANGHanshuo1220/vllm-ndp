@@ -351,6 +351,10 @@ class _AsyncLLMEngine(LLMEngine):
                 await self.model_executor.execute_model_async(
                     execute_model_req)
 
+            if (self.mem_pool_config is not None
+                and scheduler_outputs.num_prefill_groups > 0):
+                self.scheduler[virtual_engine].update_delta(add_delta, pop_delta)
+
             # we need to do this here so that last step's sampled_token_ids can
             # be passed to the next iteration for PP.
             if self.scheduler_config.is_multi_step:

@@ -1534,6 +1534,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             with self.delta_lock:
                 self.add_delta.extend(response["add_delta"])
                 self.pop_delta.extend(response["pop_delta"])
+        #     print(f"recieved from mp: {response['add_delta']}, {response['pop_delta']}")
+        # else:
+        #     print(f"Don't have response: {response['has_result']}")
         self.transfer_task_handlers.pop(seq_id)
         self.finished_transfer[seq_id] = True
         print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")

@@ -1,6 +1,6 @@
 import psutil
 import torch
-from typing import List, Dict, TypeAlias, Tuple
+from typing import List, Dict, TypeAlias, Tuple, Optional
 import asyncio
 import time
 import traceback
@@ -28,6 +28,7 @@ from vllm.mem_pool.radix_tree_cache import RadixCache
 from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 import threading
 import concurrent.futures as cf
+from vllm.utils import make_async
 
 logger = init_logger(__name__)
 
@@ -66,6 +67,8 @@ class Memory_pool_engine():
         self.kv_transfer_request_tracker: KVRequestTracker = None
         self.executor = cf.ThreadPoolExecutor(max_workers=self.max_kv_workers)
         self.block_manager_lock = threading.Lock()
+
+        self._background_kv_transfer_loop: Optional[asyncio.Task] = None
 
         self.send_delta = False
         self.last_cache_delta_send_time = 0.0
@@ -153,7 +156,7 @@ class Memory_pool_engine():
     ) -> None:
         self.radix_tree.insert(token_ids, block_ids)
 
-    def _kv_transfer_loop(self):
+    async def _kv_transfer_loop(self):
         while True:
             new_requests: List[KVTransferData] = \
                 self.kv_transfer_request_tracker.get_new_requests()
@@ -161,29 +164,26 @@ class Memory_pool_engine():
             assert len(new_requests) <= self.max_kv_workers-1, \
                 f"Don't have enough workers{self.max_kv_workers-1} to serve"
                 
-            futures = [self.executor.submit(
-                self.store_kv, 
-                seq.seq_id, seq.token_ids,
-                seq.blocks_to_tensor, 
-                seq.to_free_seqs_list) for seq in new_requests]
-            
-            cf.wait(futures)
+            if len(new_requests) > 0:
+                tasks = [
+                    asyncio.create_task(self.store_kv(
+                        seq.seq_id, seq.token_ids,
+                        seq.blocks_to_tensor, 
+                        seq.to_free_seqs_list
+                    )) for seq in new_requests
+                ]
 
-            for future in futures:
-                try:
-                    future.result()
-                except Exception as e:
-                    print(f"Error in thread: {e}")
-                    traceback.print_exc()
+                await asyncio.gather(*tasks)
+
+            await asyncio.sleep(0)
 
     def _start_kv_transfer_thread(self) -> None:
 
         self.kv_transfer_request_tracker = KVRequestTracker(
             self.max_kv_workers - 1)
 
-        self.executor.submit(self._kv_transfer_loop)
-
-        self.kv_transfer_running = True
+        self._background_kv_transfer_loop = asyncio.get_event_loop(
+        ).create_task(self._kv_transfer_loop())
 
         logger.info("kv transfer thread started")
 
@@ -219,14 +219,14 @@ class Memory_pool_engine():
         
         return res
 
-    def add_kv_transfer_request(
+    async def add_kv_transfer_request(
         self, 
         request: StoreKVRequest
     ) -> None:
         logger.debug(f"recieve {request.seq_id} at {time.time():.4f}")
 
         # Start running loop if not
-        if not self.kv_transfer_running:
+        if self._background_kv_transfer_loop is None:
             self._start_kv_transfer_thread()
 
         # Preprocessing request data
@@ -247,7 +247,24 @@ class Memory_pool_engine():
         else:
             return {"has_result": False} 
 
-    def store_kv(
+    def _store_kv_tensor(
+        self,
+        seq_id: int,
+        allocated_blocks: List[int],
+        blocks_reusable: List[bool],
+        blocks_to_tensor: Dict[int, List[torch.tensor]],
+    ) -> None:
+        for i, (_, kv_tensor_layers) in enumerate(blocks_to_tensor.items()):
+            block_id = allocated_blocks[i]
+            if not blocks_reusable[i]:
+                for i in range(len(kv_tensor_layers)):
+                    tensor = kv_tensor_layers[i].view(2, self.dimension)
+                    self.cache_enigne.cpu_cache[i][:,block_id,:] = tensor
+                logger.debug(f"Save {block_id} of seq {seq_id} successfuly")
+            else:
+                logger.debug(f"Reuse {block_id} of seq {seq_id}")
+
+    async def store_kv(
         self, 
         seq_id: int, 
         token_ids: List[int],
@@ -278,37 +295,30 @@ class Memory_pool_engine():
             arrival_time=time.time()
         )
 
-        # NOTE: Here need lock for multi-processing safety
-        with self.block_manager_lock:
-            # 1. Check if we can allocate blocks for this seq
-            can_allocate = self.block_manager.can_allocate(seq_group)
+        # 1. Check if we can allocate blocks for this seq
+        can_allocate = self.block_manager.can_allocate(seq_group)
 
-            # 2. Allocate if we can and free some blocks if neccessary
-            if can_allocate == AllocStatus.OK:
-                # allocate blocks
-                self.block_manager.allocate(seq_group)
-            elif can_allocate == AllocStatus.LATER:
-                # Add this request to later queue
-                data = KVTransferData(seq_id, token_ids, 
-                                      blocks_to_tensor, to_free_seqs_list)
-                self.kv_transfer_request_tracker.add_later_request(seq_id, data)
-            else:
-                assert False, "Abort exception is not implemented yet"
+        # 2. Allocate if we can and free some blocks if neccessary
+        if can_allocate == AllocStatus.OK:
+            # allocate blocks
+            self.block_manager.allocate(seq_group)
+        elif can_allocate == AllocStatus.LATER:
+            # Add this request to later queue
+            data = KVTransferData(seq_id, token_ids, 
+                                  blocks_to_tensor, to_free_seqs_list)
+            self.kv_transfer_request_tracker.add_later_request(seq_id, data)
+        else:
+            assert False, "Abort exception is not implemented yet"
 
         # 3. Store tensors to cpu cache
         allocated_blocks = self.block_manager.get_block_table(sequence)
         blocks_reusable = self.block_manager.get_block_reusable(sequence)
         assert len(allocated_blocks) == len(blocks_reusable)
         assert len(allocated_blocks) == len(blocks_to_tensor)
-        for i, (_, kv_tensor_layers) in enumerate(blocks_to_tensor.items()):
-            block_id = allocated_blocks[i]
-            if not blocks_reusable[i]:
-                for i in range(len(kv_tensor_layers)):
-                    tensor = kv_tensor_layers[i].view(2, self.dimension)
-                    self.cache_enigne.cpu_cache[i][:,block_id,:] = tensor
-                logger.debug(f"Save {block_id} of seq {seq_id} successfuly")
-            else:
-                logger.debug(f"Reuse {block_id} of seq {seq_id}")
+
+        await make_async(self._store_kv_tensor)(
+            seq_id, allocated_blocks, blocks_reusable, blocks_to_tensor
+        )
 
         # 4. Update radix tree
         blocks = list(blocks_to_tensor.keys())
@@ -349,7 +359,7 @@ class Memory_pool_engine():
         
         return tensor_block_tables
 
-    def compute_attention(self, request: AttentionComputation):
+    async def compute_attention(self, request: AttentionComputation):
 
         # 1. Prepare all the data
         query = torch.tensor(request.query, dtype=torch.bfloat16)
@@ -383,12 +393,11 @@ class Memory_pool_engine():
                 logger.warning(f"{seq_id}'s kv cache has not been stored yet")
                 continue
             else:
-                with self.block_manager_lock:
-                    assert self.block_manager.can_append_slots(
-                        seq_group, num_lookahead_slots=0)
+                assert self.block_manager.can_append_slots(
+                    seq_group, num_lookahead_slots=0)
             
-                    self.block_manager.append_slots(
-                        sequence, num_lookahead_slots=0)
+                self.block_manager.append_slots(
+                    sequence, num_lookahead_slots=0)
         
             # 3. Get block info and slot_mapping to attn_matadata
             block_ids = self.block_manager.get_block_table(sequence)
@@ -409,12 +418,12 @@ class Memory_pool_engine():
 
         # 4. Attention computation
         layer = request.layer
-        output = self.attention_unit(query, key, value,
-                                     self.cache_enigne.cpu_cache[layer],
-                                     cpu_attn_metadata)
+        output = await make_async(self.attention_unit)(query, key, value,
+                                                       self.cache_enigne.cpu_cache[layer],
+                                                       cpu_attn_metadata)
         return {"result": output.tolist()}
         
-    def get_kv(
+    async def get_kv(
         self, 
         request: GetKVRequest
     ) -> dict[int, list[CPU_KVCACHE_DIMENSION]]:
@@ -424,22 +433,12 @@ class Memory_pool_engine():
         blocks_to_kv: dict[int, List[CPU_KVCACHE_DIMENSION]] = {}
 
         # Get block_hash related block isd
-        with self.block_manager_lock:
-            block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
+        block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
 
         # Get corresponding kv tensors
         for i, block_id in enumerate(block_ids):
             for layer_i in len(self.cache_enigne.cpu_cache):
                 layer_tensor = self.cache_enigne.cpu_cache[layer_i][:,block_id,:].copy()
                 blocks_to_kv[required_block_hashes[i]].append(layer_tensor.tolist())
-        
-        with self.block_manager_lock:
-            _block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
-
-        if block_ids != _block_ids:
-            for i in range(len(_block_ids), len(block_ids)):
-                blocks_to_kv.pop(required_block_hashes[i])
-        
-        assert len(blocks_to_kv) == len(_block_ids)
         
         return {"kv": blocks_to_kv}

@@ -51,22 +51,19 @@ async def health() -> Response:
 async def get_kv_cache_endpoint(request: GetKVRequest) -> Response:
     """Get kv cache from pool"""
     global engine
-    result = await asyncio.to_thread(
-        engine.get_kv, request)
+    result = await engine.get_kv(request)
     return result
 
 @router.post("/store_kv")
 async def store_kv_cache_endpoint(request: StoreKVRequest):
     global engine
-    result = await asyncio.to_thread(
-        engine.add_kv_transfer_request, request)
+    result = await engine.add_kv_transfer_request(request)
     return result
 
 @router.post("/compute_attention")
 async def calculate_attention_endpoint(request: AttentionComputation):
     global engine
-    result = await asyncio.to_thread(
-        engine.compute_attention, request)
+    result = await engine.compute_attention(request)
     return result
 
 async def init_app(args):

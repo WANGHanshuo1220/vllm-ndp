@@ -1245,7 +1245,8 @@ class LLMEngine:
                 self.model_executor.execute_model(
                     execute_model_req=execute_model_req)
             
-            if self.mem_pool_config is not None:
+            if (self.mem_pool_config is not None
+                and scheduler_outputs.num_prefill_groups > 0):
                 self.scheduler[virtual_engine].update_delta(add_delta, pop_delta)
 
             # We need to do this here so that last step's sampled_token_ids can
@@ -1750,6 +1751,10 @@ class LLMEngine:
         for sg_metadata in seq_group_metadata_list:
             blocks_id.extend(list(sg_metadata.remote_cache.keys()))
             blocks_hash.extend(list(sg_metadata.remote_cache.values()))
+        assert len(blocks_id) == len(blocks_hash)
+
+        if len(blocks_hash) == 0:
+            return
 
         response = self.connector.get_kv(blocks_hash=blocks_hash)
         blocks_to_kv = response["kv"]

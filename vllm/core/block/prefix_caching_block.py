@@ -322,7 +322,6 @@ class PrefixCachingBlockAllocator(BlockAllocator):
 
         self._cached_blocks.pop(content_hash_to_evict)
         self._cached_blocks_pop_delta.append(content_hash_to_evict)
-        print(f"pop delta {content_hash_to_evict}, {len(self._cached_blocks_add_delta)}")
 
         self._refcounter.incr(block_id)
         self._track_block_id(block_id, computed=False)
@@ -459,7 +458,6 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             # this block.
             self._cached_blocks[block.content_hash] = block.block_id
             self._cached_blocks_add_delta.append(block.content_hash)
-            print(f"add delta {block.content_hash}, {len(self._cached_blocks_add_delta)}")
             # Mark this block as touched so that it can be marked as
             # computed after the entire batch of sequences are scheduled.
             self._touched_blocks.add(block.block_id)

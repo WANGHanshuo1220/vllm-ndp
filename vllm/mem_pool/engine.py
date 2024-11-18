@@ -63,11 +63,7 @@ class Memory_pool_engine():
 
         self.radix_tree = RadixCache(block_size=self.cache_config.block_size)
 
-        self.kv_transfer_running = False
         self.kv_transfer_request_tracker: KVRequestTracker = None
-        self.executor = cf.ThreadPoolExecutor(max_workers=self.max_kv_workers)
-        self.block_manager_lock = threading.Lock()
-
         self._background_kv_transfer_loop: Optional[asyncio.Task] = None
 
         self.send_delta = False
@@ -239,8 +235,7 @@ class Memory_pool_engine():
         self.kv_transfer_request_tracker.add_request(seq_id, data)
         
         if self._pass_daley(time.time()):
-            with self.block_manager_lock:
-                add_delta, pop_delta = self.block_manager.get_cached_blocks_delta()
+            add_delta, pop_delta = self.block_manager.get_cached_blocks_delta()
             return {"has_result": True, 
                     "add_delta": add_delta, 
                     "pop_delta": pop_delta} 
@@ -280,8 +275,7 @@ class Memory_pool_engine():
                 inputs={"prompt_token_ids": to_free_token_ids},
                 block_size=self.cache_config.block_size,
             )
-            with self.block_manager_lock:
-                self.block_manager.free(to_free_sequence)
+            self.block_manager.free(to_free_sequence)
 
         # Create a sequence group
         sequence = Sequence(
@@ -359,8 +353,10 @@ class Memory_pool_engine():
         
         return tensor_block_tables
 
-    async def compute_attention(self, request: AttentionComputation):
-
+    async def compute_attention(
+        self, 
+        request: AttentionComputation
+    ) -> None:
         # 1. Prepare all the data
         query = torch.tensor(request.query, dtype=torch.bfloat16)
         key = torch.tensor(request.key, dtype=torch.bfloat16)
@@ -398,7 +394,7 @@ class Memory_pool_engine():
             
                 self.block_manager.append_slots(
                     sequence, num_lookahead_slots=0)
-        
+
             # 3. Get block info and slot_mapping to attn_matadata
             block_ids = self.block_manager.get_block_table(sequence)
             _block_tables.append(block_ids)
@@ -410,6 +406,11 @@ class Memory_pool_engine():
             slot_mapping = (block_ids[-1] * self.cache_config.block_size
                             + offset - 1)
             _slot_mapping.append(slot_mapping)
+        
+        padding = query.size()[0] - len(request.seqs_data)
+        _slot_mapping.extend([-1] * padding)
+        for i in range(padding):
+            _block_tables.append([0])
         
         block_tables = self._convert_list_to_tensor_padding(_block_tables)
         cpu_attn_metadata.block_tables = block_tables

@@ -10,8 +10,6 @@ import asyncio
 from pydantic import BaseModel
 import time
 import requests
-
-from vllm.attention import AttentionMetadata, AttentionType
 from vllm.mem_pool.util import GPU_KVCACHE_DIMENSION, CPU_KVCACHE_DIMENSION
 
 logger = init_logger(__name__)

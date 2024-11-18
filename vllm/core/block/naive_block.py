@@ -344,6 +344,13 @@ class NaiveBlockAllocator(BlockAllocator):
     def get_prefix_cache_hit_rate(self) -> float:
         return -1
 
+    def get_cached_blocks_delta(self, device: Device) -> Tuple[List[int], List[int]]:
+        """Get delta cached blocks' hash values"""
+        raise NotImplementedError
+
+    def get_block_ids_from_hash(self, hashes: List[int]) -> List[int]:
+        """Get block ids from cached hashes"""
+        raise NotImplementedError
 
 class NaiveBlock(Block):
     """An implementation of the Block class that does not support prefix

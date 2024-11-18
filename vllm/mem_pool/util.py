@@ -4,7 +4,6 @@ import torch
 import asyncio
 from vllm.utils import init_logger
 from pydantic import BaseModel
-from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 
 logger = init_logger(__name__)
 

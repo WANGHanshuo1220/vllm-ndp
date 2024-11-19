@@ -28,7 +28,7 @@ from torch import nn
 from transformers import LlamaConfig
 
 from vllm.attention import Attention, AttentionMetadata
-from vllm.config import CacheConfig, LoRAConfig
+from vllm.config import CacheConfig, LoRAConfig, MemPoolConfig
 from vllm.distributed import (get_pp_group, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
 from vllm.model_executor.layers.activation import SiluAndMul
@@ -105,6 +105,7 @@ class LlamaAttention(nn.Module):
         bias: bool = False,
         cache_config: Optional[CacheConfig] = None,
         prefix: str = "",
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ) -> None:
         super().__init__()
         self.hidden_size = hidden_size
@@ -166,7 +167,8 @@ class LlamaAttention(nn.Module):
                               self.scaling,
                               num_kv_heads=self.num_kv_heads,
                               cache_config=cache_config,
-                              quant_config=quant_config)
+                              quant_config=quant_config,
+                              mem_pool_config=mem_pool_config)
 
     def forward(
         self,
@@ -174,11 +176,14 @@ class LlamaAttention(nn.Module):
         hidden_states: torch.Tensor,
         kv_cache: torch.Tensor,
         attn_metadata: AttentionMetadata,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
+        layer: Optional[int] = None,
     ) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         q, k = self.rotary_emb(positions, q, k)
-        attn_output = self.attn(q, k, v, kv_cache, attn_metadata)
+        attn_output = self.attn(q, k, v, kv_cache, attn_metadata,
+                                seqs_data=seqs_data, layer=layer)
         output, _ = self.o_proj(attn_output)
         return output
 
@@ -191,6 +196,7 @@ class LlamaDecoderLayer(nn.Module):
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
         prefix: str = "",
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ) -> None:
         super().__init__()
         self.hidden_size = config.hidden_size
@@ -219,6 +225,7 @@ class LlamaDecoderLayer(nn.Module):
             bias=attention_bias,
             cache_config=cache_config,
             prefix=f"{prefix}.self_attn",
+            mem_pool_config=mem_pool_config,
         )
         self.mlp = LlamaMLP(
             hidden_size=self.hidden_size,
@@ -240,6 +247,8 @@ class LlamaDecoderLayer(nn.Module):
         kv_cache: torch.Tensor,
         attn_metadata: AttentionMetadata,
         residual: Optional[torch.Tensor],
+        seqs_data: Optional[Dict[int, List[int]]] = None,
+        layer: Optional[int] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Self Attention
         if residual is None:
@@ -253,6 +262,8 @@ class LlamaDecoderLayer(nn.Module):
             hidden_states=hidden_states,
             kv_cache=kv_cache,
             attn_metadata=attn_metadata,
+            seqs_data=seqs_data,
+            layer=layer,
         )
 
         # Fully Connected
@@ -271,6 +282,7 @@ class LlamaModel(nn.Module):
         quant_config: Optional[QuantizationConfig] = None,
         lora_config: Optional[LoRAConfig] = None,
         prefix: str = "",
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ) -> None:
         super().__init__()
         self.config = config
@@ -294,7 +306,8 @@ class LlamaModel(nn.Module):
             lambda prefix: LlamaDecoderLayer(config=config,
                                              cache_config=cache_config,
                                              quant_config=quant_config,
-                                             prefix=prefix),
+                                             prefix=prefix,
+                                             mem_pool_config=mem_pool_config),
             prefix=f"{prefix}.layers")
         if get_pp_group().is_last_rank:
             self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -312,6 +325,7 @@ class LlamaModel(nn.Module):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors],
         inputs_embeds: Optional[torch.Tensor] = None,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
@@ -332,6 +346,8 @@ class LlamaModel(nn.Module):
                 kv_caches[i - self.start_layer],
                 attn_metadata,
                 residual,
+                seqs_data=seqs_data,
+                layer=i,
             )
 
         if not get_pp_group().is_last_rank:
@@ -401,6 +417,7 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA):
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
         lora_config: Optional[LoRAConfig] = None,
+        mem_pool_config: Optional[MemPoolConfig] = None,
     ) -> None:
         super().__init__()
 
@@ -411,7 +428,8 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA):
                                 cache_config,
                                 quant_config,
                                 lora_config=lora_config,
-                                prefix="model")
+                                prefix="model",
+                                mem_pool_config=mem_pool_config)
         if get_pp_group().is_last_rank:
             self.unpadded_vocab_size = config.vocab_size
             if lora_config:
@@ -444,9 +462,11 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
+        seqs_data: Optional[Dict[int, List[int]]] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
         model_output = self.model(input_ids, positions, kv_caches,
-                                  attn_metadata, intermediate_tensors)
+                                  attn_metadata, intermediate_tensors,
+                                  seqs_data=seqs_data)
         return model_output
 
     def compute_logits(

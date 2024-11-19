@@ -12,11 +12,13 @@ prompts = [
 sampling_params = SamplingParams(temperature=0, top_p=1)
 
 # Create an LLM.
-# llm = LLM(model="/root/models/opt-125m", gpu_memory_utilization=0.4)
+# llm = LLM(model="/root/models/opt-125m", 
+#           use_v2_block_manager=True,
+#           enable_prefix_caching=True,)
 llm = LLM(model="/root/models/opt-125m", 
           use_v2_block_manager=True,
           enable_prefix_caching=True,
-          mp_enable=True, mp_host="10.210.22.244", mp_port="32765")
+          mp_enable=True, mp_host="10.210.22.244", mp_port="31037")
 print("================================")
 print("Begin to generate first")
 print("================================")

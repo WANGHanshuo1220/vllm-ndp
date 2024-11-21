@@ -12,13 +12,11 @@ prompts = [
 sampling_params = SamplingParams(temperature=0, top_p=1)
 
 # Create an LLM.
+llm = LLM(model="facebook/opt-125m")
 # llm = LLM(model="/root/models/opt-125m", 
 #           use_v2_block_manager=True,
-#           enable_prefix_caching=True,)
-llm = LLM(model="/root/models/opt-125m", 
-          use_v2_block_manager=True,
-          enable_prefix_caching=True,
-          mp_enable=True, mp_host="10.210.22.244", mp_port="31037")
+#           enable_prefix_caching=True,
+#           mp_enable=True, mp_host="10.210.22.244", mp_port="31037")
 print("================================")
 print("Begin to generate first")
 print("================================")

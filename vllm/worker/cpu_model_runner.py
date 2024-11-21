@@ -355,7 +355,9 @@ class CPUModelRunner(ModelRunnerBase[CPUModelInput]):
         kv_caches: List[torch.Tensor],
         intermediate_tensors: Optional[IntermediateTensors] = None,
         num_steps: int = 1,
-    ) -> Optional[List[SamplerOutput]]:
+    ) -> Tuple[Optional[List[SamplerOutput]],
+               Optional[List[int]],
+               Optional[List[int]]]:
         if num_steps > 1:
             raise ValueError(
                 "CPU worker does not support multi-step execution.")
@@ -382,11 +384,11 @@ class CPUModelRunner(ModelRunnerBase[CPUModelInput]):
 
         # Only perform sampling in the driver worker.
         if not self.is_driver_worker:
-            return []
+            return [], None, None
 
         # Sample the next token.
         output = self.model.sample(
             logits=logits,
             sampling_metadata=model_input.sampling_metadata,
         )
-        return [output]
+        return [output], None, None

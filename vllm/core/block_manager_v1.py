@@ -739,3 +739,9 @@ class BlockSpaceManagerV1(BlockSpaceManager):
         if device == Device.CPU:
             return self.cpu_allocator.get_prefix_cache_hit_rate()
         raise ValueError(f"Invalid device: {device}")
+
+    def get_cached_blocks_delta(self) -> Tuple[List[int], List[int]]:
+        pass
+
+    def get_block_ids_from_hash(self, hashes: List[int]) -> List[int]:
+        pass

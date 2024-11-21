@@ -305,6 +305,13 @@ class CPUExecutor(ExecutorBase):
     def stop_profile(self) -> None:
         self.driver_method_invoker(self.driver_worker, "stop_profile")
 
+    def save_kv_cache(
+        self, 
+        block_id: int,
+        layer_i: int, 
+        kv_layer: torch.tensor
+    ) -> None:
+        pass
 
 class CPUExecutorAsync(CPUExecutor, ExecutorAsyncBase):
 

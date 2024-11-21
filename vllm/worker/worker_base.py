@@ -276,7 +276,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                 model_input,
                 async_callback=execute_model_req.async_callback)
 
-        if self.device_config.device_type is not "cpu":
+        if self.device_config.device_type != "cpu":
             assert (execute_model_req.seq_group_metadata_list is not None)
             model_input = dataclasses.replace(  # type: ignore
                 model_input,

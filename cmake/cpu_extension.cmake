@@ -2,6 +2,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 
 #
+#   Set CXX compiler to version 12
+#   May need to modity accordingly
+#
+set(CMAKE_C_COMPILER /usr/bin/gcc-12)
+set(CMAKE_CXX_COMPILER /usr/bin/g++-12)
+
+#
 # Define environment variables for special configurations
 #
 if(DEFINED ENV{VLLM_CPU_AVX512BF16})

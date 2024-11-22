@@ -1,1 +1,1 @@
-python server.py --model /root/models/opt-125m
+python server.py --model facebook/opt-125m

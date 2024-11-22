@@ -70,15 +70,16 @@ class Memory_pool_engine():
         self.last_cache_delta_send_time = 0.0
         self.time_lock = threading.Lock()
     
-    def __del__(self):
-        if self.executor is not None:
-            self.executor.shutdown()
-
     def _create_attention(self) -> Attention:
         num_heads = self.model_config.get_num_attention_heads(
             self.parallel_config)
         head_size = self.model_config.get_head_size()
-        scale = 1.0
+        hidden_size = self.model_config.get_hidden_size()
+        total_num_head = self.model_config.get_num_attention_heads(
+            self.parallel_config
+        )
+        head_dim = hidden_size // total_num_head
+        scale = head_dim**-0.5
         return Attention(
             num_heads,
             head_size,
@@ -92,8 +93,9 @@ class Memory_pool_engine():
             self.cache_config.block_size, self.cache_config.cache_dtype,
             self.model_config, self.parallel_config)
 
-        num_cpu_blocks = int(self._get_available_cpu_memory() //
-                             cache_cpu_block_size)
+        # num_cpu_blocks = int(self._get_available_cpu_memory() //
+        #                      cache_cpu_block_size)
+        num_cpu_blocks = 4000
         num_cpu_blocks = max(num_cpu_blocks, 0)
 
         self.cache_config.num_gpu_blocks = num_cpu_blocks

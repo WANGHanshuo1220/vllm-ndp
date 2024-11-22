@@ -15,16 +15,19 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # python3 benchmarks/benchmark_throughput.py --input-len 256 --output-len 256 --output-json throughput_results.json 2>&1 | tee benchmark_throughput.txt
 # bench_throughput_exit_code=$?
 
-MODEL_PATH="/root/models/opt-125m"
-DATA_PATH="/root/lmcache/ShareGPT_V3_unfiltered_cleaned_split.json"
+MODEL_PATH="facebook/opt-125m"
+DATA_PATH="/home/ubuntu/vllm-ndp/ShareGPT_V3_unfiltered_cleaned_split.json"
 
 # run server-based benchmarks and upload the result to buildkite
 python3 -m vllm.entrypoints.openai.api_server \
     --model ${MODEL_PATH} \
-    --gpu-memory-utilization 0.8 \
-    --enable-prefix-caching \
-    --use-v2-block-manager \
-    --mp-enable --mp_host "10.210.22.244" --mp_port "32765" &
+    --gpu-memory-utilization 0.8 &
+# python3 -m vllm.entrypoints.openai.api_server \
+#     --model ${MODEL_PATH} \
+#     --gpu-memory-utilization 0.8 \
+#     --enable-prefix-caching \
+#     --use-v2-block-manager \
+#     --mp-enable --mp_host "10.210.22.244" --mp_port "32765" &
     # --mp-enable --mp_host "localhost" --mp_port "9999" &
 server_pid=$!
 # wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
@@ -36,7 +39,7 @@ python3 benchmarks/benchmark_serving.py \
     --dataset-name sharegpt \
     --dataset-path ${DATA_PATH} \
     --model ${MODEL_PATH} \
-    --num-prompts 2 \
+    --num-prompts 3 \
     --endpoint /v1/completions \
     --tokenizer ${MODEL_PATH} \
     2>&1 | tee benchmark_serving.txt

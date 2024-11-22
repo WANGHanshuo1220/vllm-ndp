@@ -30,28 +30,28 @@ for output in outputs:
     generated_text = output.outputs[0].text
     print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
 
-print("================================")
-print("Begin to generate second")
-print("================================")
-prompts = [
-    "Self-attention is an essential component of large language models (LLM) but a significant source of inference latency for long sequences. ",
-]
-outputs = llm.generate(prompts, sampling_params)
-# Print the outputs.
-for output in outputs:
-    prompt = output.prompt
-    generated_text = output.outputs[0].text
-    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+# print("================================")
+# print("Begin to generate second")
+# print("================================")
+# prompts = [
+#     "Self-attention is an essential component of large language models (LLM) but a significant source of inference latency for long sequences. ",
+# ]
+# outputs = llm.generate(prompts, sampling_params)
+# # Print the outputs.
+# for output in outputs:
+#     prompt = output.prompt
+#     generated_text = output.outputs[0].text
+#     print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
 
-print("================================")
-print("Begin to generate third")
-print("================================")
-prompts = [
-    "The capital of France is",
-]
-outputs = llm.generate(prompts, sampling_params)
-# Print the outputs.
-for output in outputs:
-    prompt = output.prompt
-    generated_text = output.outputs[0].text
-    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+# print("================================")
+# print("Begin to generate third")
+# print("================================")
+# prompts = [
+#     "The capital of France is",
+# ]
+# outputs = llm.generate(prompts, sampling_params)
+# # Print the outputs.
+# for output in outputs:
+#     prompt = output.prompt
+#     generated_text = output.outputs[0].text
+#     print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")

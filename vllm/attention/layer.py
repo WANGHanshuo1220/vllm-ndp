@@ -1,4 +1,5 @@
 """Attention layer."""
+import time
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -137,7 +138,8 @@ class Attention(nn.Module):
             return res
 
         # q, k, v are all [num_tokens, embedding_size]
-        return self.impl.forward(query,
+        t1 = time.time()
+        out = self.impl.forward(query,
                                  key,
                                  value,
                                  kv_cache,
@@ -145,6 +147,9 @@ class Attention(nn.Module):
                                  self._k_scale,
                                  self._v_scale,
                                  attn_type=attn_type)
+        t2 = time.time()
+        print(f"att time = {(t2-t1):.6}s")
+        return out
 
     def extra_repr(self) -> str:
         s = f"head_size={self.impl.head_size}"  # type: ignore

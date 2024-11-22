@@ -109,8 +109,7 @@ async def run_server(args, **uvicorn_kwargs) -> None:
     shutdown_task = await serve_http(
         app,
         host=args.mp_host,
-        port=args.mp_port,
-        log_level="error",
+        port=8080,
         **uvicorn_kwargs,
     )
 

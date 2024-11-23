@@ -1,11 +1,12 @@
 echo "2_prepare_envs.sh"
 cd $HOME/vllm-ndp
 
-eval "$($HOME/miniconda3/bin/conda shell.bash hook)"
+eval "$($HOME/miniconda3/bin/conda shell.bash hook)" > /dev/null 2>&1
 conda init bash
 conda activate mp
 
 sudo apt-get update  -y
+sudo apt install build-essential -y
 sudo apt-get install -y gcc-12 g++-12 libnuma-dev
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 --slave /usr/bin/g++ g++ /usr/bin/g++-12
 

@@ -4,7 +4,7 @@
 # echo "============================="
 
 bash 1_prepare_basic.sh
-eval "$($HOME/miniconda3/bin/conda shell.bash hook)"
+eval "$($HOME/miniconda3/bin/conda shell.bash hook)" > /dev/null 2>&1
 conda init bash
 
 bash 2_prepare_envs.sh
@@ -15,4 +15,6 @@ wait
 
 cd $HOME/vllm-ndp
 conda activate mp
+
+export PATH=/usr/bin:$PATH
 VLLM_TARGET_DEVICE=cpu python setup.py install

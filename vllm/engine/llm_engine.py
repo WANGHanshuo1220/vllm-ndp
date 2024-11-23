@@ -56,6 +56,7 @@ from vllm.version import __version__ as VLLM_VERSION
 
 from vllm.mem_pool.connector import Remote_connector
 from vllm.mem_pool.util import CPU_KVCACHE_DIMENSION
+from vllm.utils import random_uuid
 
 logger = init_logger(__name__)
 _LOCAL_LOGGING_INTERVAL_SEC = 5
@@ -276,6 +277,8 @@ class LLMEngine:
         # TODO(woosuk): Print more configs in debug mode.
         from vllm.plugins import load_general_plugins
         load_general_plugins()
+        
+        self.engine_id = f"engine_{random_uuid()}"
 
         self.model_config = model_config
         self.cache_config = cache_config
@@ -642,7 +645,8 @@ class LLMEngine:
 
         encoder_seq = None
         if 'encoder_prompt_token_ids' in processed_inputs:
-            encoder_seq = Sequence(seq_id,
+            encoder_seq = Sequence(self.engine_id,
+                                   seq_id,
                                    processed_inputs,
                                    block_size,
                                    eos_token_id,

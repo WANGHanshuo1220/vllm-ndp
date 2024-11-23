@@ -152,7 +152,7 @@ class ModelInputForGPUWithSamplingMetadata(ModelInputForGPU):
     is_prompt: Optional[bool] = None
 
     # For telling the remote pool to free seq's blocks
-    to_free_seq_list: Optional[int] = None
+    to_free_seq_list: Optional[str] = None
 
     def as_broadcastable_tensor_dict(self) -> Dict[str, Any]:
         tensor_dict = {
@@ -1524,7 +1524,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         seq_id: int,
         token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]], # b_id -> tensor
-        to_free_seq_list: List[int],
+        to_free_seq_list: List[str],
     ) -> None:
         self.kv_transfer_time[seq_id] = time.time()
         logger.info(f"send {seq_id} at {time.time():.4f}")
@@ -1545,7 +1545,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         self, 
         kv_caches: List[torch.tensor], # List[2, nb, bs, nh, hs]
         seq_group_metadata_list: List[SequenceGroupMetadata],
-        to_free_seq_list: List[int]
+        to_free_seq_list: List[str]
     ) -> None:
         block_tables = {} # Dict[seq_id, List(block_ids)]
         seq_id_to_tokens = {} #  Dict[seq_id, List(token_ids)]

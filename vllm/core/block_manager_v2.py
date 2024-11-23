@@ -14,7 +14,7 @@ from vllm.core.interfaces import AllocStatus, BlockSpaceManager
 from vllm.sequence import Sequence, SequenceGroup, SequenceStatus
 from vllm.utils import Device
 
-SeqId = int
+SeqId = str
 EncoderSeqId = str
 
 

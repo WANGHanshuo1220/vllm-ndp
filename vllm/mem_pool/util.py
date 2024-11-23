@@ -25,14 +25,14 @@ class AttentionComputation(BaseModel):
     max_decode_seq_len: int
     num_decode_tokens: int
     seq_lens: List[int]
-    seqs_data: Dict[int, List[int]]
+    seqs_data: Dict[str, List[int]]
     layer: int
 
 class StoreKVRequest(BaseModel):
-    seq_id: int
+    seq_id: str
     token_ids: List[int]
     tensor_data: Dict[int, List[GPU_KVCACHE_DIMENSION]]
-    to_free_seq_list: List[int]
+    to_free_seq_list: List[str]
 
 class GetKVRequest(BaseModel):
     cached_hashes: List[PrefixHash]
@@ -41,10 +41,10 @@ class KVTransferData:
 
     def __init__(
         self,
-        seq_id: int,
+        seq_id: str,
         token_ids: List[int],
         blocks_to_tensor: Dict[int, List[torch.tensor]],
-        to_free_seq_list: List[int],
+        to_free_seq_list: List[str],
     ) -> None:
         self.seq_id = seq_id
         self.token_ids = token_ids

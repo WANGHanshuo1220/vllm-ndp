@@ -245,7 +245,7 @@ class Memory_pool_engine():
 
     def _store_kv_tensor(
         self,
-        seq_id: int,
+        seq_id: str,
         allocated_blocks: List[int],
         blocks_reusable: List[bool],
         blocks_to_tensor: Dict[int, List[torch.tensor]],
@@ -262,10 +262,10 @@ class Memory_pool_engine():
 
     async def store_kv(
         self, 
-        seq_id: int, 
+        seq_id: str, 
         token_ids: List[int],
         blocks_to_tensor: Dict[int, List[torch.tensor]],
-        to_free_seqs_list: List[int],
+        to_free_seqs_list: List[str],
     ) -> None:
         # First free blocks of finished seqs
         for to_free_seq_id in to_free_seqs_list:

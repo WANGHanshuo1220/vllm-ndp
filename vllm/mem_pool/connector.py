@@ -61,10 +61,10 @@ class Remote_connector():
     
     def store_kv(
         self, 
-        seq_id: int, 
+        seq_id: str, 
         token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[GPU_KVCACHE_DIMENSION]],
-        to_free_seq_list: List[int],
+        to_free_seq_list: List[str],
     ) -> Dict[bool, Any]:
         url = self.base_url + "/store_kv"
         payload = {

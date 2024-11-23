@@ -1,35 +1,18 @@
 import asyncio
-import threading
-import time
 
-# 共享数据结构
-shared_data = []
+async def func_a():
+    print("Start func_a")
+    await asyncio.sleep(1)  # 模拟异步操作
+    print("Before yield in func_a")
+    yield "Value from func_a"  # 暂停并返回值
+    print("After yield in func_a")  # 继续执行
 
-# 创建锁，保护对共享数据的访问
-lock = threading.Lock()
+async def func_b():
+    print("Start func_b")
+    async for ret in func_a():
+        print(f"Received from func_a: {ret}")
+    print("func_b continues after await")
 
-def infinite_loop():
-    count = 0
-    while True:
-        time.sleep(1)  # 模拟阻塞的操作
-        with lock:  # 保护对共享数据的访问
-            shared_data.append(count)
-            print(f"Thread added {count} to shared_data.")
-            count += 1
+# 运行事件循环
+asyncio.run(func_b())
 
-async def main():
-    # 启动一个线程，执行无限循环
-    thread = threading.Thread(target=infinite_loop, daemon=True)  # 设置 daemon=True，确保程序结束时线程自动结束
-    thread.start()
-    
-    # 给无限循环线程一些时间执行
-    i = 0
-    while True:
-        with lock:  # 保护对共享数据的访问
-            print(f"Async function {i} read shared_data: {shared_data}")
-        i = i + 1
-        time.sleep(2)
-
-
-# 运行 async 函数
-asyncio.run(main())

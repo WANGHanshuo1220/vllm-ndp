@@ -1,9 +1,8 @@
 import psutil
 import torch
-from typing import List, Dict, TypeAlias, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, AsyncGenerator
 import asyncio
 import time
-import traceback
 
 from vllm.mem_pool.attention import Attention
 from vllm.core.block_manager_v2 import BlockSpaceManagerV2
@@ -27,7 +26,6 @@ from vllm.mem_pool.util import (KVRequestTracker, KVTransferData,
 from vllm.mem_pool.radix_tree_cache import RadixCache
 from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 import threading
-import concurrent.futures as cf
 from vllm.utils import make_async
 
 logger = init_logger(__name__)
@@ -70,7 +68,7 @@ class Memory_pool_engine():
         self.send_delta = False
         self.last_cache_delta_send_time = 0.0
         self.time_lock = threading.Lock()
-    
+
     def _create_attention(self) -> Attention:
         num_heads = self.model_config.get_num_attention_heads(
             self.parallel_config)
@@ -356,22 +354,20 @@ class Memory_pool_engine():
         
         return tensor_block_tables
 
-    def _prefetch(self, tensors: List[torch.tensor]):
+    def _prefetch(self, tensors: List[torch.tensor], stride: int = 32):
         for tensor in tensors:
-            for i in range(0, tensor.size(0), 64):  # 假设缓存行大小为 64
-                _ = tensor[i]
+            for i in range(0, tensor.size(0), stride):
+                tensor[i] += 0.0
 
     async def compute_attention(
         self, 
         request: AttentionComputation
-    ) -> None:
+    ) -> AsyncGenerator[Dict, None]:
         # 1. Prepare all the data
         query = torch.tensor(request.query, dtype=torch.bfloat16)
         key = torch.tensor(request.key, dtype=torch.bfloat16)
         value = torch.tensor(request.value, dtype=torch.bfloat16)
 
-        task = make_async(self._prefetch)([query, key, value])
-        
         cpu_attn_metadata = self._create_cpu_attn_metadata(
             seq_lens_tensor=torch.tensor(request.seq_len_tensor, 
                                          dtype=torch.int32),
@@ -428,12 +424,14 @@ class Memory_pool_engine():
                                                       dtype=torch.int64)
 
         # 4. Attention computation
-        await task
         layer = request.layer
-        output = await make_async(self.attention_unit)(query, key, value,
+        output = self.attention_unit(query, key, value,
                                                        self.cache_enigne.cpu_cache[layer],
                                                        cpu_attn_metadata)
-        return {"result": output.tolist()}
+        yield {"result": output.tolist()}
+
+        self._prefetch([self.cache_enigne.cpu_cache[
+            (layer+1)%self.model_config.get_num_layers(self.parallel_config)]])
         
     async def get_kv(
         self, 

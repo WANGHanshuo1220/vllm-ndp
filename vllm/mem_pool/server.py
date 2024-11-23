@@ -63,7 +63,9 @@ async def store_kv_cache_endpoint(request: StoreKVRequest):
 @router.post("/compute_attention")
 async def calculate_attention_endpoint(request: AttentionComputation):
     global engine
-    result = await engine.compute_attention(request)
+    result = None
+    async for ret in engine.compute_attention(request):
+        result = ret
     return result
 
 async def init_app(args):

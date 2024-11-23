@@ -4,6 +4,9 @@
 # echo "============================="
 
 bash 1_prepare_basic.sh
+eval "$($HOME/miniconda3/bin/conda shell.bash hook)"
+conda init bash
+
 bash 2_prepare_envs.sh
 bash 3_install_dnnl.sh &
 bash 4_install_ipex.sh &

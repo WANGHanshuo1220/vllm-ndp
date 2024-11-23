@@ -1,4 +1,8 @@
+echo "2_prepare_envs.sh"
 cd $HOME/vllm-ndp
+
+eval "$($HOME/miniconda3/bin/conda shell.bash hook)"
+conda init bash
 conda activate mp
 
 sudo apt-get update  -y

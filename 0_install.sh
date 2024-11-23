@@ -13,8 +13,23 @@ bash 4_install_ipex.sh &
 
 wait
 
-cd $HOME/vllm-ndp
+lines=(
+    "export PATH=/usr/bin:\$PATH"
+    "export CC=/usr/bin/gcc"
+    "export CXX=/usr/bin/g++"
+)
+
+for line in "${lines[@]}"; do
+    if ! grep -Fxq "$line" ~/.bashrc; then
+        echo "$line" >> ~/.bashrc
+        echo "Added to ~/.bashrc: $line"
+    else
+        echo "The line already exists in ~/.bashrc: $line"
+    fi
+done
+
+source ~/.bashrc
 conda activate mp
 
-export PATH=/usr/bin:$PATH
+cd $HOME/vllm-ndp
 VLLM_TARGET_DEVICE=cpu python setup.py install

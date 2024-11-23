@@ -1,3 +1,8 @@
+# Prepare github setting
+# ssh-keygen -t rsa -b 4096 -C "hanshuo_wang@163.com"
+# cat ~/.ssh/id_rsa.pub
+# echo "============================="
+
 bash 1_prepare_basic.sh
 bash 2_prepare_envs.sh
 bash 3_install_dnnl.sh &

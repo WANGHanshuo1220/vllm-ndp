@@ -57,6 +57,7 @@ class Memory_pool_engine():
                               self.parallel_config) *
                           self.model_config.get_head_size())
 
+        torch.set_default_dtype(torch.bfloat16)
         self.attention_unit = self._create_attention()
         self.cache_enigne = self._create_cache_engine()
         self.block_manager = self._create_block_manager()
@@ -355,6 +356,11 @@ class Memory_pool_engine():
         
         return tensor_block_tables
 
+    def _prefetch(self, tensors: List[torch.tensor]):
+        for tensor in tensors:
+            for i in range(0, tensor.size(0), 64):  # 假设缓存行大小为 64
+                _ = tensor[i]
+
     async def compute_attention(
         self, 
         request: AttentionComputation
@@ -363,6 +369,8 @@ class Memory_pool_engine():
         query = torch.tensor(request.query, dtype=torch.bfloat16)
         key = torch.tensor(request.key, dtype=torch.bfloat16)
         value = torch.tensor(request.value, dtype=torch.bfloat16)
+
+        task = make_async(self._prefetch)([query, key, value])
         
         cpu_attn_metadata = self._create_cpu_attn_metadata(
             seq_lens_tensor=torch.tensor(request.seq_len_tensor, 
@@ -420,6 +428,7 @@ class Memory_pool_engine():
                                                       dtype=torch.int64)
 
         # 4. Attention computation
+        await task
         layer = request.layer
         output = await make_async(self.attention_unit)(query, key, value,
                                                        self.cache_enigne.cpu_cache[layer],

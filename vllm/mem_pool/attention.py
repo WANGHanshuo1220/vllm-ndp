@@ -99,13 +99,13 @@ class Attention(nn.Module):
     ) -> torch.Tensor:
         t1 = time.time()
         out = self.impl.forward(query,
-                                 key,
-                                 value,
-                                 kv_cache,
-                                 attn_metadata,
-                                 self._k_scale,
-                                 self._v_scale,
-                                 attn_type=attn_type)
+                                key,
+                                value,
+                                kv_cache,
+                                attn_metadata,
+                                self._k_scale,
+                                self._v_scale,
+                                attn_type=attn_type)
         t2 = time.time()
         print(f"att time = {(t2-t1):.6}s")
         return out

@@ -5,7 +5,7 @@ eval "$($HOME/miniconda3/bin/conda shell.bash hook)" > /dev/null 2>&1
 conda init bash
 conda activate mp
 
-git clone git@github.com:oneapi-src/oneDNN.git
+git clone git@github.com:WANGHanshuo1220/oneDNN.git
 cd $HOME/oneDNN
 mkdir build
 cd build

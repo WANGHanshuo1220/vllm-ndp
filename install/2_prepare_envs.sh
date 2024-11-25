@@ -11,7 +11,9 @@ sudo apt-get install -y gcc-12 g++-12 libnuma-dev
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 --slave /usr/bin/g++ g++ /usr/bin/g++-12
 
 pip install cmake==3.26 wheel packaging ninja "setuptools-scm>=8" numpy
-pip install -v -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu
+pip install $HOME/torch-2.5.0+cpu-cp310-cp310-linux_x86_64.whl
+pip install $HOME/torchvision-0.20.0+cpu-cp310-cp310-linux_x86_64.whl
+pip install -v -r requirements-cpu.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 export PATH=$PATH:~/.local/bin
 export PATH=/usr/bin:$PATH

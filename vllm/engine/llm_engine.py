@@ -1766,12 +1766,14 @@ class LLMEngine:
             return
 
         response = self.connector.get_kv(blocks_hash=blocks_hash)
-        blocks_to_kv = response["kv"]
+        blocks_to_kv = response
 
         dtype = self.model_config.dtype
         device = self.device_config.device_type
         shape = (2, self.cache_config.block_size,
-                 self.model_config.get_num_attention_heads(),
+                 self.model_config.get_num_attention_heads(
+                    self.parallel_config
+                 ),
                  self.model_config.get_head_size())
         for i, block_id in enumerate(blocks_id):
             if blocks_hash[i] not in blocks_to_kv:
@@ -1792,5 +1794,5 @@ class LLMEngine:
 
         for sg_metadata in seq_group_metadata_list:
             for block_id, block_hash in sg_metadata.remote_cache.items():
-                if block_hash in blocks_to_kv:
+                if str(block_hash) in blocks_to_kv.keys():
                     sg_metadata.computed_block_nums.append(block_id)

@@ -9,6 +9,7 @@ from vllm.core.block.naive_block import (BlockPool, NaiveBlock,
                                          NaiveBlockAllocator)
 from vllm.core.evictor_v2 import EvictionPolicy, Evictor, make_evictor
 from vllm.utils import cdiv
+import hashlib
 
 PrefixHash = int
 
@@ -458,6 +459,7 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             # this block.
             self._cached_blocks[block.content_hash] = block.block_id
             self._cached_blocks_add_delta.append(block.content_hash)
+            print(f"token_ids = {block.token_ids}, hash = {block.content_hash}")
             # Mark this block as touched so that it can be marked as
             # computed after the entire batch of sequences are scheduled.
             self._touched_blocks.add(block.block_id)
@@ -886,7 +888,14 @@ class PrefixCachingBlock(Block):
         - int: The computed hash value for the block.
         """
         assert (prev_block_hash is None) == is_first_block
-        return hash((is_first_block, prev_block_hash, *cur_block_token_ids))
+
+        input_str = str(is_first_block) + str(prev_block_hash)
+        for token_id in cur_block_token_ids:
+            input_str = input_str + str(token_id)
+
+        _hash_str = hashlib.sha256(input_str.encode())
+        _hash = int.from_bytes(_hash_str.digest(), byteorder='big')
+        return _hash
 
 
 class ComputedBlocksTracker:

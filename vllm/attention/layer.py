@@ -138,7 +138,7 @@ class Attention(nn.Module):
             return res
 
         # q, k, v are all [num_tokens, embedding_size]
-        t1 = time.time()
+        # t1 = time.time()
         out = self.impl.forward(query,
                                 key,
                                 value,
@@ -147,8 +147,8 @@ class Attention(nn.Module):
                                 self._k_scale,
                                 self._v_scale,
                                 attn_type=attn_type)
-        t2 = time.time()
-        print(f"att time = {(t2-t1):.6}s")
+        # t2 = time.time()
+        # print(f"att time = {(t2-t1):.6}s")
         return out
 
     def extra_repr(self) -> str:

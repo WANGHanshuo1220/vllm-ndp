@@ -640,8 +640,8 @@ class LLMEngine:
         seq_id = next(self.seq_counter)
         eos_token_id = self.input_preprocessor.get_eos_token_id(lora_request)
 
-        seq = Sequence(seq_id, processed_inputs, block_size, eos_token_id,
-                       lora_request, prompt_adapter_request)
+        seq = Sequence(self.engine_id, seq_id, processed_inputs, block_size, 
+                       eos_token_id, lora_request, prompt_adapter_request)
 
         encoder_seq = None
         if 'encoder_prompt_token_ids' in processed_inputs:
@@ -1191,6 +1191,10 @@ class LLMEngine:
             (seq_group_metadata_list, scheduler_outputs,
              allow_async_output_proc, to_free_seqs_list
              ) = self.scheduler[virtual_engine].schedule()
+
+            # if scheduler_outputs.num_prefill_groups > 0:
+            #     print(seq_group_metadata_list)
+            #     print("=================================")
 
             if (self.mem_pool_config is not None
                 and seq_group_metadata_list is not None

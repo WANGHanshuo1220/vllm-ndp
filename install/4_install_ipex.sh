@@ -7,5 +7,5 @@ conda activate mp
 
 mkdir ipex
 cd ipex
-cp $HOME/vllm-mp/install/compile_bundle.sh .
+cp $HOME/vllm-ndp/install/compile_bundle.sh .
 bash compile_bundle.sh

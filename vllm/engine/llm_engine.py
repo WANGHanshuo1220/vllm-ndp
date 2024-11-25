@@ -638,9 +638,10 @@ class LLMEngine:
         # Create the sequences.
         block_size = self.cache_config.block_size
         seq_id = next(self.seq_counter)
+        seq_id = self.engine_id + "_" + str(seq_id)
         eos_token_id = self.input_preprocessor.get_eos_token_id(lora_request)
 
-        seq = Sequence(self.engine_id, seq_id, processed_inputs, block_size, 
+        seq = Sequence(seq_id, processed_inputs, block_size, 
                        eos_token_id, lora_request, prompt_adapter_request)
 
         encoder_seq = None

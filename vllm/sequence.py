@@ -355,7 +355,6 @@ class Sequence:
 
     def __init__(
         self,
-        engine_id: str,
         seq_id: int,
         inputs: "LLMInputs",
         block_size: int,
@@ -364,7 +363,7 @@ class Sequence:
         prompt_adapter_request: Optional[PromptAdapterRequest] = None,
         from_decoder_prompt: bool = True,
     ) -> None:
-        self.seq_id = engine_id + "_" + str(seq_id)
+        self.seq_id = seq_id
         self.inputs = inputs
         self.block_size = block_size
         self.eos_token_id = eos_token_id

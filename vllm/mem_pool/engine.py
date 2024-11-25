@@ -27,6 +27,7 @@ from vllm.mem_pool.radix_tree_cache import RadixCache
 from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 import threading
 from vllm.utils import make_async
+from collections import defaultdict
 
 logger = init_logger(__name__)
 
@@ -440,15 +441,15 @@ class Memory_pool_engine():
         required_block_hashes = request.cached_hashes
 
         # content_hash -> kv_cache
-        blocks_to_kv: dict[int, List[CPU_KVCACHE_DIMENSION]] = {}
+        blocks_to_kv: defaultdict[int, List[CPU_KVCACHE_DIMENSION]] = defaultdict(list)
 
         # Get block_hash related block isd
         block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
 
         # Get corresponding kv tensors
         for i, block_id in enumerate(block_ids):
-            for layer_i in len(self.cache_enigne.cpu_cache):
-                layer_tensor = self.cache_enigne.cpu_cache[layer_i][:,block_id,:].copy()
+            for layer_i in range(len(self.cache_enigne.cpu_cache)):
+                layer_tensor = self.cache_enigne.cpu_cache[layer_i][:,block_id,:]
                 blocks_to_kv[required_block_hashes[i]].append(layer_tensor.tolist())
         
         return {"kv": blocks_to_kv}

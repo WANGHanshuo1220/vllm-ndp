@@ -13,12 +13,12 @@ prompts = [
 sampling_params = SamplingParams(temperature=0, top_p=1)
 
 # Create an LLM.
-# llm = LLM(model="/root/models/Llama-3.1-8B-Instruct", 
-llm = LLM(model="/root/models/opt-125m",
+llm = LLM(model="/root/models/Llama-3.1-8B-Instruct", 
+# llm = LLM(model="/root/models/opt-125m",
           use_v2_block_manager=True,
           enable_prefix_caching=True,
-          enable_chunked_prefill=False,
-          mp_enable=True, mp_host="1.15.151.193", mp_port="8080")
+          enable_chunked_prefill=False,)
+        #   mp_enable=True, mp_host="1.15.151.193", mp_port="8080")
 
 prompts = [
     "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",

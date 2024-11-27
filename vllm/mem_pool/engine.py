@@ -27,7 +27,6 @@ from vllm.mem_pool.radix_tree_cache import RadixCache
 from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 import threading
 from vllm.utils import make_async
-from collections import defaultdict
 
 logger = init_logger(__name__)
 
@@ -73,6 +72,10 @@ class Memory_pool_engine():
     def _create_attention(self) -> Attention:
         num_heads = self.model_config.get_num_attention_heads(
             self.parallel_config)
+        model_config = self.model_config.hf_config
+        num_kv_heads = getattr(model_config, "num_key_value_heads", 
+                               model_config.num_attention_heads), 
+        num_kv_heads = num_kv_heads[0]
         head_size = self.model_config.get_head_size()
         hidden_size = self.model_config.get_hidden_size()
         total_num_head = self.model_config.get_num_attention_heads(
@@ -84,6 +87,7 @@ class Memory_pool_engine():
             num_heads,
             head_size,
             scale=scale,
+            num_kv_heads=num_kv_heads,
             cache_config=self.cache_config,
             mem_pool_config=self.mem_pool_config
         )
@@ -93,9 +97,8 @@ class Memory_pool_engine():
             self.cache_config.block_size, self.cache_config.cache_dtype,
             self.model_config, self.parallel_config)
 
-        # num_cpu_blocks = int(self._get_available_cpu_memory() //
-        #                      cache_cpu_block_size)
-        num_cpu_blocks = 4000
+        num_cpu_blocks = int(self._get_available_cpu_memory() //
+                             cache_cpu_block_size)
         num_cpu_blocks = max(num_cpu_blocks, 0)
 
         self.cache_config.num_gpu_blocks = num_cpu_blocks
@@ -221,7 +224,7 @@ class Memory_pool_engine():
         self, 
         request: StoreKVRequest
     ) -> None:
-        logger.debug(f"recieve {request.seq_id} at {time.time():.4f}")
+        logger.info(f"recieve {request.seq_id} at {time.time():.4f}")
 
         # Start running loop if not
         if self._background_kv_transfer_loop is None:
@@ -268,6 +271,7 @@ class Memory_pool_engine():
         blocks_to_tensor: Dict[int, List[torch.tensor]],
         to_free_seqs_list: List[str],
     ) -> None:
+        logger.info(f"store {seq_id} at {time.time():.4f}")
         # First free blocks of finished seqs
         for to_free_seq_id in to_free_seqs_list:
             block_table = self.block_manager.block_tables[to_free_seq_id]
@@ -365,6 +369,7 @@ class Memory_pool_engine():
         request: AttentionComputation
     ) -> AsyncGenerator[Dict, None]:
         # 1. Prepare all the data
+        # t1 = time.time()
         query = torch.tensor(request.query, dtype=torch.bfloat16)
         key = torch.tensor(request.key, dtype=torch.bfloat16)
         value = torch.tensor(request.value, dtype=torch.bfloat16)
@@ -393,7 +398,7 @@ class Memory_pool_engine():
 
             # 2. Allocate blocks if necessary
             while not self.block_manager.has_seq(sequence):
-                logger.warning(f"{seq_id}'s kv cache has not been stored yet")
+                await asyncio.sleep(0)
                 continue
             else:
                 assert self.block_manager.can_append_slots(
@@ -429,6 +434,8 @@ class Memory_pool_engine():
         output = self.attention_unit(query, key, value,
                                                        self.cache_enigne.cpu_cache[layer],
                                                        cpu_attn_metadata)
+        # t2 = time.time()
+        # print(f"att time = {(t2-t1):.6}s")
         yield {"result": output.tolist()}
 
         self._prefetch([self.cache_enigne.cpu_cache[
@@ -441,15 +448,15 @@ class Memory_pool_engine():
         required_block_hashes = request.cached_hashes
 
         # content_hash -> kv_cache
-        blocks_to_kv: defaultdict[int, List[CPU_KVCACHE_DIMENSION]] = defaultdict(list)
+        blocks_to_kv: dict[int, List[CPU_KVCACHE_DIMENSION]] = {}
 
         # Get block_hash related block isd
         block_ids = self.block_manager.get_block_ids_from_hash(required_block_hashes)
 
         # Get corresponding kv tensors
         for i, block_id in enumerate(block_ids):
-            for layer_i in range(len(self.cache_enigne.cpu_cache)):
-                layer_tensor = self.cache_enigne.cpu_cache[layer_i][:,block_id,:]
+            for layer_i in len(self.cache_enigne.cpu_cache):
+                layer_tensor = self.cache_enigne.cpu_cache[layer_i][:,block_id,:].copy()
                 blocks_to_kv[required_block_hashes[i]].append(layer_tensor.tolist())
         
         return {"kv": blocks_to_kv}

@@ -112,6 +112,7 @@ async def run_server(args, **uvicorn_kwargs) -> None:
         app,
         host=args.mp_host,
         port=8080,
+        log_level="error",
         **uvicorn_kwargs,
     )
 

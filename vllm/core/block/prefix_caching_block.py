@@ -459,7 +459,7 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             # this block.
             self._cached_blocks[block.content_hash] = block.block_id
             self._cached_blocks_add_delta.append(block.content_hash)
-            print(f"token_ids = {block.token_ids}, hash = {block.content_hash}")
+            # print(f"token_ids = {block.token_ids}, hash = {block.content_hash}")
             # Mark this block as touched so that it can be marked as
             # computed after the entire batch of sequences are scheduled.
             self._touched_blocks.add(block.block_id)

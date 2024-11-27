@@ -1,5 +1,6 @@
 from vllm import LLM, SamplingParams
 import time
+import random
 
 # Sample prompts.
 prompts = [
@@ -12,16 +13,13 @@ prompts = [
 sampling_params = SamplingParams(temperature=0, top_p=1)
 
 # Create an LLM.
+# llm = LLM(model="/root/models/Llama-3.1-8B-Instruct", 
 llm = LLM(model="/root/models/opt-125m",
           use_v2_block_manager=True,
-          enable_prefix_caching=True,)
-# llm = LLM(model="/root/models/opt-125m", 
-#           use_v2_block_manager=True,
-#           enable_prefix_caching=True,
-#           mp_enable=True, mp_host="10.210.22.244", mp_port="31037")
-print("================================")
-print("Begin to generate first")
-print("================================")
+          enable_prefix_caching=True,
+          enable_chunked_prefill=False,
+          mp_enable=True, mp_host="1.15.151.193", mp_port="8080")
+
 prompts = [
     "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",
 ]
@@ -32,41 +30,14 @@ for output in outputs:
     generated_text = output.outputs[0].text
     print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
 
-print("================================")
-print("Begin to generate second")
-print("================================")
-prompts = [
-    "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",
-]
-outputs = llm.generate(prompts, sampling_params)
-# Print the outputs.
-for output in outputs:
-    prompt = output.prompt
-    generated_text = output.outputs[0].text
-    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
-
-# print("================================")
-# print("Begin to generate second")
-# print("================================")
-# prompts = [
-#     "Self-attention is an essential component of large language models (LLM) but a significant source of inference latency for long sequences. ",
-# ]
+# n = 130 * 1000
+# token_ids = [random.randint(0, 128000) for _ in range(n)]
+# prompts = {
+#     "prompt_token_ids": token_ids
+# }
 # outputs = llm.generate(prompts, sampling_params)
 # # Print the outputs.
 # for output in outputs:
-#     prompt = output.prompt
+#     prompt = output.prompt_token_ids
 #     generated_text = output.outputs[0].text
-#     print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
-
-# print("================================")
-# print("Begin to generate third")
-# print("================================")
-# prompts = [
-#     "The capital of France is",
-# ]
-# outputs = llm.generate(prompts, sampling_params)
-# # Print the outputs.
-# for output in outputs:
-#     prompt = output.prompt
-#     generated_text = output.outputs[0].text
-#     print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+#     print(f"Prompt: {len(prompt)}, Generated text: {generated_text!r}")

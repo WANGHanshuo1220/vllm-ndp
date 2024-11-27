@@ -369,7 +369,7 @@ class Memory_pool_engine():
         request: AttentionComputation
     ) -> AsyncGenerator[Dict, None]:
         # 1. Prepare all the data
-        # t1 = time.time()
+        t1 = time.time()
         query = torch.tensor(request.query, dtype=torch.bfloat16)
         key = torch.tensor(request.key, dtype=torch.bfloat16)
         value = torch.tensor(request.value, dtype=torch.bfloat16)
@@ -431,12 +431,13 @@ class Memory_pool_engine():
 
         # 4. Attention computation
         layer = request.layer
+        t2 = time.time()
         output = self.attention_unit(query, key, value,
-                                                       self.cache_enigne.cpu_cache[layer],
-                                                       cpu_attn_metadata)
-        # t2 = time.time()
-        # print(f"att time = {(t2-t1):.6}s")
+                                        self.cache_enigne.cpu_cache[layer],
+                                        cpu_attn_metadata)
+        t3 = time.time()
         yield {"result": output.tolist()}
+        print(f"att ttl time = {(t3-t1):.6}s, attn time = {(t3-t2):.6}s")
 
         self._prefetch([self.cache_enigne.cpu_cache[
             (layer+1)%self.model_config.get_num_layers(self.parallel_config)]])

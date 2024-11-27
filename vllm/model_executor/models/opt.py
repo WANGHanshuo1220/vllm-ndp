@@ -106,16 +106,16 @@ class OPTAttention(nn.Module):
         attn_metadata: AttentionMetadata,
         seqs_data: Optional[Dict[int, List[int]]] = None,
         layer: Optional[int] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[float]]:
         # print(f"hidden: {hidden_states.shape}")
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
         # print(f"q: {q.shape}, k: {k.shape}, v: {v.shape}")
-        attn_output = self.attn(q, k, v, kv_cache, 
-                                attn_metadata, seqs_data=seqs_data,
-                                layer=layer)
+        attn_output, t = self.attn(q, k, v, kv_cache, 
+                                   attn_metadata, seqs_data=seqs_data,
+                                   layer=layer)
         output, _ = self.out_proj(attn_output)
-        return output
+        return output, t
 
 
 class OPTDecoderLayer(nn.Module):
@@ -168,16 +168,16 @@ class OPTDecoderLayer(nn.Module):
         attn_metadata: AttentionMetadata,
         seqs_data: Optional[Dict[int, List[int]]] = None,
         layer: Optional[int] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[float]]:
         # Self Attention
         residual = hidden_states
         # 125m, 1.7B, ..., 175B applies layer norm BEFORE attention
         if self.do_layer_norm_before:
             hidden_states = self.self_attn_layer_norm(hidden_states)
-        hidden_states = self.self_attn(hidden_states=hidden_states,
-                                       kv_cache=kv_cache,
-                                       attn_metadata=attn_metadata,
-                                       seqs_data=seqs_data, layer=layer)
+        hidden_states, t = self.self_attn(hidden_states=hidden_states,
+                                          kv_cache=kv_cache,
+                                          attn_metadata=attn_metadata,
+                                          seqs_data=seqs_data, layer=layer)
         hidden_states = residual + hidden_states
         # 350m applies layer norm AFTER attention
         if not self.do_layer_norm_before:
@@ -195,7 +195,7 @@ class OPTDecoderLayer(nn.Module):
         # 350m applies layer norm AFTER attention
         if not self.do_layer_norm_before:
             hidden_states = self.final_layer_norm(hidden_states)
-        return hidden_states
+        return hidden_states, t
 
 
 class OPTDecoder(nn.Module):
@@ -265,7 +265,7 @@ class OPTDecoder(nn.Module):
         attn_metadata: AttentionMetadata,
         inputs_embeds: Optional[torch.Tensor] = None,
         seqs_data: Optional[Dict[int, List[int]]] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[float]]:
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings(input_ids)
         pos_embeds = self.embed_positions(positions)
@@ -273,17 +273,19 @@ class OPTDecoder(nn.Module):
             inputs_embeds, _ = self.project_in(inputs_embeds)
         hidden_states = inputs_embeds + pos_embeds
 
+        ttl = 0.0
         for i in range(len(self.layers)):
             layer = self.layers[i]
-            hidden_states = layer(hidden_states, kv_caches[i], 
-                                  attn_metadata, seqs_data=seqs_data,
-                                  layer=i)
+            hidden_states, t = layer(hidden_states, kv_caches[i], 
+                                     attn_metadata, seqs_data=seqs_data,
+                                     layer=i)
+            ttl = ttl + t
 
         if self.final_layer_norm is not None:
             hidden_states = self.final_layer_norm(hidden_states)
         if self.project_out is not None:
             hidden_states, _ = self.project_out(hidden_states)
-        return hidden_states
+        return hidden_states, t
 
 
 class OPTModel(nn.Module):
@@ -310,7 +312,7 @@ class OPTModel(nn.Module):
         attn_metadata: AttentionMetadata,
         inputs_embeds: Optional[torch.Tensor] = None,
         seqs_data: Optional[Dict[int, List[int]]] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[float]]:
         return self.decoder(input_ids,
                             positions,
                             kv_caches,
@@ -349,11 +351,10 @@ class OPTForCausalLM(nn.Module):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         seqs_data: Optional[Dict[int, List[int]]] = None,
-    ) -> torch.Tensor:
-        hidden_states = self.model(input_ids, positions, 
-                                   kv_caches, attn_metadata,
-                                   seqs_data=seqs_data)
-        return hidden_states
+    ) -> Tuple[torch.Tensor, Optional[float]]:
+        return self.model(input_ids, positions, 
+                          kv_caches, attn_metadata,
+                          seqs_data=seqs_data)
 
     def compute_logits(
         self,

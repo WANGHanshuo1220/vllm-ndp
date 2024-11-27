@@ -1,6 +1,6 @@
 """Attention layer."""
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -111,7 +111,7 @@ class Attention(nn.Module):
         attn_type: AttentionType = AttentionType.DECODER,
         seqs_data: Optional[Dict[int, List[int]]] = None,
         layer: Optional[int] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[float]]:
         if (Attention._connector is not None
             and attn_metadata.decode_metadata is not None
             and seqs_data is not None):
@@ -124,6 +124,7 @@ class Attention(nn.Module):
             assert self.attn_event_loop is not None
 
             # Transfer q,k,v and cpu_attn_metadata and get result
+            t1 = time.time()
             res = Attention._connector.compute_attention(
                 query=query, key=key, value=value,
                 seq_len_tensor=attn_metadata.seq_lens_tensor,
@@ -135,10 +136,12 @@ class Attention(nn.Module):
             )
             # FIXME:if we have multiple GPUs, we should do extra work
             res = res.to(dtype=self.dtype, device="cuda")
-            return res
+            t2 = time.time()
+            # print(f"remote att time = {(t2-t1):.6}s")
+            return res, t2-t1
 
         # q, k, v are all [num_tokens, embedding_size]
-        # t1 = time.time()
+        t1 = time.time()
         out = self.impl.forward(query,
                                 key,
                                 value,
@@ -147,9 +150,9 @@ class Attention(nn.Module):
                                 self._k_scale,
                                 self._v_scale,
                                 attn_type=attn_type)
-        # t2 = time.time()
-        # print(f"att time = {(t2-t1):.6}s")
-        return out
+        t2 = time.time()
+        # print(f"Attn ttl time = {(t2-t1):.6}s")
+        return out, t2-t1
 
     def extra_repr(self) -> str:
         s = f"head_size={self.impl.head_size}"  # type: ignore

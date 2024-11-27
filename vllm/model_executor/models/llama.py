@@ -178,14 +178,14 @@ class LlamaAttention(nn.Module):
         attn_metadata: AttentionMetadata,
         seqs_data: Optional[Dict[int, List[int]]] = None,
         layer: Optional[int] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[float]]:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         q, k = self.rotary_emb(positions, q, k)
-        attn_output = self.attn(q, k, v, kv_cache, attn_metadata,
+        attn_output, t = self.attn(q, k, v, kv_cache, attn_metadata,
                                 seqs_data=seqs_data, layer=layer)
         output, _ = self.o_proj(attn_output)
-        return output
+        return output, t
 
 
 class LlamaDecoderLayer(nn.Module):
@@ -249,7 +249,7 @@ class LlamaDecoderLayer(nn.Module):
         residual: Optional[torch.Tensor],
         seqs_data: Optional[Dict[int, List[int]]] = None,
         layer: Optional[int] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[float]]:
         # Self Attention
         if residual is None:
             residual = hidden_states
@@ -257,7 +257,7 @@ class LlamaDecoderLayer(nn.Module):
         else:
             hidden_states, residual = self.input_layernorm(
                 hidden_states, residual)
-        hidden_states = self.self_attn(
+        hidden_states, t = self.self_attn(
             positions=positions,
             hidden_states=hidden_states,
             kv_cache=kv_cache,
@@ -270,7 +270,7 @@ class LlamaDecoderLayer(nn.Module):
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states, residual)
         hidden_states = self.mlp(hidden_states)
-        return hidden_states, residual
+        return hidden_states, residual, t
 
 
 class LlamaModel(nn.Module):
@@ -338,9 +338,10 @@ class LlamaModel(nn.Module):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
+        ttl = 0.0
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
-            hidden_states, residual = layer(
+            hidden_states, residual, t = layer(
                 positions,
                 hidden_states,
                 kv_caches[i - self.start_layer],
@@ -349,6 +350,7 @@ class LlamaModel(nn.Module):
                 seqs_data=seqs_data,
                 layer=i,
             )
+            ttl = ttl + t
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
@@ -357,7 +359,7 @@ class LlamaModel(nn.Module):
             })
 
         hidden_states, _ = self.norm(hidden_states, residual)
-        return hidden_states
+        return hidden_states, ttl
 
 
 class LlamaForCausalLM(nn.Module, SupportsLoRA):
@@ -463,11 +465,11 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         seqs_data: Optional[Dict[int, List[int]]] = None,
-    ) -> Union[torch.Tensor, IntermediateTensors]:
-        model_output = self.model(input_ids, positions, kv_caches,
+    ) -> Tuple[Union[torch.Tensor, IntermediateTensors], Optional[float]]:
+        model_output, ttl = self.model(input_ids, positions, kv_caches,
                                   attn_metadata, intermediate_tensors,
                                   seqs_data=seqs_data)
-        return model_output
+        return model_output, ttl
 
     def compute_logits(
         self,

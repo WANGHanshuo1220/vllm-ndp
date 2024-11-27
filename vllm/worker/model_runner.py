@@ -1653,7 +1653,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 for seq_id, seq_data in seq_group_meta.seq_data.items():
                     seqs_data[seq_id] = seq_data.get_token_ids()
 
-        hidden_or_intermediate_states = model_executable(
+        t1 = time.time()
+        hidden_or_intermediate_states, t = model_executable(
             input_ids=model_input.input_tokens,
             positions=model_input.input_positions,
             kv_caches=kv_caches,
@@ -1663,6 +1664,11 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             **MultiModalInputs.as_kwargs(multi_modal_kwargs,
                                          device=self.device),
             **seqlen_agnostic_kwargs)
+        t2 = time.time()
+        if model_input.attn_metadata.num_prefills > 0:
+            print(f"Prefill: Forward ttl time = {(t2-t1):.6f}s, attn ttl time = {t:.6}s")
+        else:
+            print(f"Decode: Forward ttl time = {(t2-t1):.6f}s, attn ttl time = {t:.6}s")
 
         # NOTE: Here if this request is prefill, the generated blocks should 
         # be stored remotely. [(engine_id, req_id): kv] should be transfered

@@ -33,7 +33,7 @@ cd ${BASEFOLDER}
 
 # Checkout individual components
 if [ ! -d intel-extension-for-pytorch ]; then
-    git clone git@github.com:WANGHanshuo1220/intel-extension-for-pytorch.git intel-extension-for-pytorch
+    git clone git@github.com:intel/intel-extension-for-pytorch.git intel-extension-for-pytorch
 fi
 cd intel-extension-for-pytorch
 if [ ! -z "${VER_IPEX}" ]; then
@@ -55,7 +55,7 @@ VER_GCC=$(python tools/dep_ver_utils.py -f dependency_version.json -k gcc:min-ve
 cd ..
 
 if [ ! -d llvm-project ]; then
-    git clone git@github.com:WANGHanshuo1220/llvm-project.git
+    git clone git@github.com:llvm/llvm-project.git
 fi
 cd llvm-project
 if [ ! -z "${COMMIT_LLVM}" ]; then

@@ -56,7 +56,7 @@ from vllm.worker.model_runner_base import (
     _init_sampling_metadata_from_tensor_dict, dump_input_when_exception)
 
 import asyncio
-from vllm.mem_pool.connector import Remote_connector
+from vllm.mem_pool.tcp.connector import Remote_connector
 from vllm.utils import make_async
 import threading        
 

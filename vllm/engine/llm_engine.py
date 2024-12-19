@@ -54,7 +54,7 @@ from vllm.usage.usage_lib import (UsageContext, is_usage_stats_enabled,
 from vllm.utils import Counter, Device
 from vllm.version import __version__ as VLLM_VERSION
 
-from vllm.mem_pool.connector import Remote_connector
+from vllm.mem_pool.tcp.connector import Remote_connector
 from vllm.mem_pool.util import CPU_KVCACHE_DIMENSION
 from vllm.utils import random_uuid
 

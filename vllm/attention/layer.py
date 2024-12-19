@@ -12,7 +12,7 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 from vllm.model_executor.layers.quantization.kv_cache import BaseKVCacheMethod
 
-from vllm.mem_pool.connector import Remote_connector
+from vllm.mem_pool.tcp.connector import Remote_connector
 import asyncio
 
 class Attention(nn.Module):

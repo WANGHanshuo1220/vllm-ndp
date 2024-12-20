@@ -56,7 +56,7 @@ from vllm.version import __version__ as VLLM_VERSION
 
 from vllm.mem_pool.tcp.connector import Remote_connector
 from vllm.mem_pool.util import CPU_KVCACHE_DIMENSION
-from vllm.utils import random_uuid
+import secrets
 
 logger = init_logger(__name__)
 _LOCAL_LOGGING_INTERVAL_SEC = 5
@@ -278,7 +278,8 @@ class LLMEngine:
         from vllm.plugins import load_general_plugins
         load_general_plugins()
         
-        self.engine_id = f"engine_{random_uuid()}"
+        # self.engine_id = f"engine_{random_uuid()}"
+        self.engine_id = secrets.randbits(32)
 
         self.model_config = model_config
         self.cache_config = cache_config
@@ -638,7 +639,7 @@ class LLMEngine:
         # Create the sequences.
         block_size = self.cache_config.block_size
         seq_id = next(self.seq_counter)
-        seq_id = self.engine_id + "_" + str(seq_id)
+        # seq_id = self.engine_id + "_" + str(seq_id)
         eos_token_id = self.input_preprocessor.get_eos_token_id(lora_request)
 
         seq = Sequence(seq_id, processed_inputs, block_size, 

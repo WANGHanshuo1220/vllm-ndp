@@ -61,7 +61,7 @@ class Remote_connector():
     
     def store_kv(
         self, 
-        seq_id: str, 
+        seq_id: int, 
         token_ids: List[int],
         to_transfer_tensor_list: Dict[int, List[GPU_KVCACHE_DIMENSION]],
         to_free_seq_list: List[str],

@@ -355,7 +355,7 @@ class Sequence:
 
     def __init__(
         self,
-        seq_id: str,
+        seq_id: int,
         inputs: "LLMInputs",
         block_size: int,
         eos_token_id: Optional[int] = None,

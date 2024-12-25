@@ -152,7 +152,7 @@ class ModelInputForGPUWithSamplingMetadata(ModelInputForGPU):
     is_prompt: Optional[bool] = None
 
     # For telling the remote pool to free seq's blocks
-    to_free_seq_list: Optional[str] = None
+    to_free_seq_list: Optional[int] = None
 
     def as_broadcastable_tensor_dict(self) -> Dict[str, Any]:
         tensor_dict = {
@@ -1521,15 +1521,19 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
     def _store_prefilled_kv(
         self, 
-        seq_id: int,
+        engine_id: int,
+        seq_ids: list[int],
+        seq_lengths: list[int],
         token_ids: List[int],
-        to_transfer_tensor_list: Dict[int, List[KVCAHE_DIMENSION]], # b_id -> tensor
-        to_free_seq_list: List[str],
+        free_seq_ids: List[int],
+        # (block0's all_layers, block1's all_layers, ...)
+        tensor_list: List[torch.tensor], 
     ) -> None:
-        self.kv_transfer_time[seq_id] = time.time()
-        logger.info(f"send {seq_id} at {time.time():.4f}")
-        response = self.connector.store_kv(seq_id, token_ids, 
-                                           to_transfer_tensor_list, to_free_seq_list)
+        for seq_id in seq_ids:
+            self.kv_transfer_time[seq_id] = time.time()
+            logger.info(f"send {seq_id} at {time.time():.4f}")
+        response = self.connector.store_kv(
+            engine_id, seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list)
         if response["has_result"]:
             with self.delta_lock:
                 self.add_delta.extend(response["add_delta"])
@@ -1537,9 +1541,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         #     print(f"recieved from mp: {response['add_delta']}, {response['pop_delta']}")
         # else:
         #     print(f"Don't have response: {response['has_result']}")
-        self.transfer_task_handlers.pop(seq_id)
-        self.finished_transfer[seq_id] = True
-        print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")
+        for seq_id in seq_ids:
+            self.transfer_task_handlers.pop(seq_id)
+            self.finished_transfer[seq_id] = True
+            print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")
 
     def _store_prefilled_kv_helper(
         self, 
@@ -1557,24 +1562,30 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 seq_id_to_tokens[seq_id] = list(seq_data.get_prompt_token_ids())
             block_tables.update(sg_metadata.block_tables)
 
-        _to_free_seq_list = to_free_seq_list.copy()
-
         # Get seq_id -> block_ids
+        to_transfer_tensor_list = []
         for seq_id, block_ids in block_tables.items():
-            to_transfer_tensor_list = {}
+            seq_tensor_list = []
             for block_id in block_ids:
                 block_tensor_list = []
                 for layer in range(len(kv_caches)):
-                    block_layer_tensor = kv_caches[layer][:, block_id, :, :, :]
-                    block_tensor_list.append(block_layer_tensor.tolist())
-                to_transfer_tensor_list[block_id] = block_tensor_list
-            
-            task = make_async(self._store_prefilled_kv, self.store_kv_event_loop)(
-                seq_id, seq_id_to_tokens[seq_id], to_transfer_tensor_list,
-                _to_free_seq_list.copy(),
-            )
-            self.transfer_task_handlers[seq_id] = task
-            _to_free_seq_list.clear()
+                    layer_tensor = kv_caches[layer][:, block_id, :, :, :]
+                    block_tensor_list.append(layer_tensor)
+                seq_tensor_list.extend(block_tensor_list)
+            to_transfer_tensor_list.extend(seq_tensor_list)
+
+        # TODO: get engine_id
+        engine_id = None
+        seq_ids = list(block_tables.keys())
+        seq_lengths = [len(sublist) for sublist in block_tables.values()]
+        token_ids = [item for sublist in block_tables.values() for item in sublist]
+        free_seq_ids = to_free_seq_list
+        tensor_list = to_transfer_tensor_list
+
+        task = make_async(self._store_prefilled_kv, self.store_kv_event_loop)(
+            engine_id, seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list
+        )
+        self.transfer_task_handlers[seq_id] = task
 
     @torch.inference_mode()
     @dump_input_when_exception(exclude_args=[0], exclude_kwargs=["self"])
@@ -1678,7 +1689,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         ):
             self._store_prefilled_kv_helper(kv_caches, 
                                             model_input.seq_group_metadata_list,
-                                            model_input.to_free_seq_list)
+                                            model_input.to_free_seq_list.copy())
         
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):

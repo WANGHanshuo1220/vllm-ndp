@@ -1,11 +1,27 @@
+from vllm.config import (CacheConfig, DeviceConfig, ModelConfig, 
+                         ParallelConfig, MemPoolConfig, EngineConfig)
 from vllm.mem_pool.attention import Attention
 from vllm.utils import init_logger
+
+from resources import Shared_mem_resources
+import rdma_data_struct
 
 logger = init_logger(__name__)
 
 class cpu_engine():
-    def __init__(self):
-        pass
+    def __init__(
+        self, 
+        engine_config: EngineConfig,
+        shared_resources: Shared_mem_resources
+    ) -> None:
+        self.model_config: ModelConfig = engine_config.model_config
+        self.mem_pool_config: MemPoolConfig = engine_config.mem_pool_config
+        self.parallel_config: ParallelConfig = engine_config.parallel_config
+        self.cache_config: CacheConfig = engine_config.cache_config
+
+        self.shared_resources = shared_resources
+        self.engine = self._create_attention()
+
 
     def _create_attention(self) -> Attention:
         num_heads = self.model_config.get_num_attention_heads(
@@ -29,3 +45,18 @@ class cpu_engine():
             cache_config=self.cache_config,
             mem_pool_config=self.mem_pool_config
         )
+
+
+    def save_kv_cache(
+        self,
+        recv_handler: rdma_data_struct.ClientSendKVCache,
+    ):
+        pass
+
+
+    def compute_attention(
+        self,
+        recv_handler: rdma_data_struct.ClientSendQKV,
+        send_handler: rdma_data_struct.ClientRecvOutput,
+    ):
+        pass

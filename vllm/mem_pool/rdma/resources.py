@@ -8,6 +8,7 @@ from vllm.config import (CacheConfig, DeviceConfig, ModelConfig,
                          ParallelConfig, MemPoolConfig, EngineConfig)
 
 import torch
+import rdma_data_struct
 
 logger = init_logger(__name__)
 
@@ -28,7 +29,7 @@ class Shared_mem_resources():
                               self.parallel_config) *
                           self.model_config.get_head_size())
 
-        torch.set_default_dtype(torch.bfloat16)
+        torch.set_default_dtype(torch.float16)
         self.cache_enigne = self._create_cache_engine()
         self.block_manager = self._create_block_manager()
 
@@ -67,7 +68,14 @@ class Shared_mem_resources():
             sliding_window=self.cache_config.sliding_window,
             enable_caching=True)
 
+
     def _get_available_cpu_memory(self):
+        kv_cache_size = rdma_data_struct.KVCacheMrSize
+        qkv_size = rdma_data_struct.QKVMrSize
+        output_size = rdma_data_struct.OutputSize
+
+        max_size = max(kv_cache_size, qkv_size)
+
         memory_info = psutil.virtual_memory()
-        return memory_info.available * \
+        return (memory_info.available - max_size - output_size) * \
             self.cache_config.gpu_memory_utilization

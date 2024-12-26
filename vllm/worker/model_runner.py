@@ -1526,8 +1526,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         seq_lengths: list[int],
         token_ids: List[int],
         free_seq_ids: List[int],
-        # (block0's all_layers, block1's all_layers, ...)
-        tensor_list: List[torch.tensor], 
+        # sequences -> blocks -> layers
+        tensor_list: List[List[List[torch.tensor]]],
     ) -> None:
         for seq_id in seq_ids:
             self.kv_transfer_time[seq_id] = time.time()
@@ -1563,16 +1563,16 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             block_tables.update(sg_metadata.block_tables)
 
         # Get seq_id -> block_ids
-        to_transfer_tensor_list = []
+        to_transfer_tensor_list = [] # store all sequences
         for seq_id, block_ids in block_tables.items():
-            seq_tensor_list = []
+            seq_tensor_list = [] # store all blocks of a single sequence
             for block_id in block_ids:
-                block_tensor_list = []
+                block_tensor_list = [] # store all layers of a single block
                 for layer in range(len(kv_caches)):
                     layer_tensor = kv_caches[layer][:, block_id, :, :, :]
                     block_tensor_list.append(layer_tensor)
-                seq_tensor_list.extend(block_tensor_list)
-            to_transfer_tensor_list.extend(seq_tensor_list)
+                seq_tensor_list.append(block_tensor_list)
+            to_transfer_tensor_list.append(seq_tensor_list)
 
         # TODO: get engine_id
         engine_id = None

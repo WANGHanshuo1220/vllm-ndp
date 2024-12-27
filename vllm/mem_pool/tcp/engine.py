@@ -257,9 +257,9 @@ class Memory_pool_engine():
         for i, (_, kv_tensor_layers) in enumerate(blocks_to_tensor.items()):
             block_id = allocated_blocks[i]
             if not blocks_reusable[i]:
-                for i in range(len(kv_tensor_layers)):
-                    tensor = kv_tensor_layers[i].view(2, self.dimension)
-                    self.cache_enigne.cpu_cache[i][:,block_id,:] = tensor
+                for j in range(len(kv_tensor_layers)):
+                    tensor = kv_tensor_layers[j].view(2, self.dimension)
+                    self.cache_enigne.cpu_cache[j][:,block_id,:] = tensor
                 logger.debug(f"Save {block_id} of seq {seq_id} successfuly")
             else:
                 logger.debug(f"Reuse {block_id} of seq {seq_id}")
@@ -433,8 +433,8 @@ class Memory_pool_engine():
         layer = request.layer
         t2 = time.time()
         output = self.attention_unit(query, key, value,
-                                        self.cache_enigne.cpu_cache[layer],
-                                        cpu_attn_metadata)
+                                     self.cache_enigne.cpu_cache[layer],
+                                     cpu_attn_metadata)
         t3 = time.time()
         yield {"result": output.tolist()}
         print(f"att ttl time = {(t3-t1):.6}s, attn time = {(t3-t2):.6}s")

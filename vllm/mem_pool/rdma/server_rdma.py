@@ -45,7 +45,8 @@ def client_loop(
         if (server.is_prefill_kv_cache(client_id)):
             # This is a prefill save kv cache request
             recv_handler = server.get_recv_kv_cache_handler(client_id)
-            engine.save_kv_cache(recv_handler)
+            send_handler = server.get_send_cache_info_handler(client_id)
+            engine.save_kv_cache(recv_handler, send_handler)
             # recv_handler.pretty_print()
         else:
             # This is a decode attention computation request

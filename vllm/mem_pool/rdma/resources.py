@@ -1,7 +1,11 @@
 import psutil
+from typing import List, Dict, Tuple, Optional, AsyncGenerator
 from vllm.core.block_manager_v2 import BlockSpaceManagerV2
+from vllm.core.block.block_table import BlockTable
 from vllm.worker.cpu_worker import CPUCacheEngine
 from vllm.executor.cpu_executor import _verify_and_get_model_config
+from vllm.sequence import Sequence, SequenceGroup
+from vllm.core.interfaces import AllocStatus
 from vllm.utils import init_logger
 
 from vllm.config import (CacheConfig, DeviceConfig, ModelConfig, 
@@ -29,7 +33,7 @@ class Shared_mem_resources():
                               self.parallel_config) *
                           self.model_config.get_head_size())
 
-        torch.set_default_dtype(torch.float16)
+        torch.set_default_dtype(torch.bfloat16)
         self.cache_enigne = self._create_cache_engine()
         self.block_manager = self._create_block_manager()
 
@@ -79,3 +83,96 @@ class Shared_mem_resources():
         memory_info = psutil.virtual_memory()
         return (memory_info.available - max_size - output_size) * \
             self.cache_config.gpu_memory_utilization
+    
+    """ cache engine functions """
+    
+    def set_kv_tensor(
+        self,
+        layer_id: int,
+        block_id: int,
+        layer_tensor: torch.tensor,
+    ) -> None:
+        self.cache_enigne.cpu_cache[layer_id][:block_id,:] = layer_tensor
+
+    def get_kv_cache_layer(
+        self,
+        layer_id: int
+    ) -> torch.tensor:
+        return self.cache_enigne.cpu_cache[layer_id]
+
+    
+    """ block manager functions """
+    
+    def get_block_table(
+        self,
+        seq_id: int,
+    ) -> BlockTable:
+        return self.block_manager.block_tables[seq_id]
+
+    
+    def free_seq(
+        self,
+        seq: Sequence
+    ) -> None:
+        self.block_manager.free(seq)
+
+
+    def has_seq(
+        self,
+        seq: Sequence
+    ) -> bool:
+        return self.block_manager.has_seq(seq)
+
+    
+    def can_allocate(
+        self,
+        seq_group: SequenceGroup,
+    ) -> AllocStatus:
+        return self.block_manager.can_allocate(seq_group)
+
+
+    def can_append_slots(
+        self,
+        seq_group: SequenceGroup,
+        num_lookahead_slot: int
+    ) -> AllocStatus:
+        return self.block_manager.can_allocate_slots(seq_group, 
+                                                     num_lookahead_slot)
+
+
+    def allocate(
+        self,
+        seq_group: SequenceGroup,
+    ) -> None:
+        self.block_manager.allocate(seq_group)
+
+
+    def append_slots(
+        self,
+        seq_group: SequenceGroup,
+        num_lookahead_slot: int
+    ) -> None:
+        self.block_manager.append_slots(seq_group,
+                                        num_lookahead_slot)
+
+
+    def get_block_table(
+        self,
+        seq: Sequence
+    ) -> List[int]:
+        return self.block_manager.get_block_table(seq)
+
+
+    def get_block_reusable(
+        self,
+        seq: Sequence
+    ) -> List[bool]:
+        return self.block_manager.get_block_reusable(seq)
+    
+    
+    def get_cached_blocks_delta(
+        self
+    ) -> Tuple[List[int], List[int]]:
+        return self.block_manager.get_cached_blocks_delta()
+    
+    

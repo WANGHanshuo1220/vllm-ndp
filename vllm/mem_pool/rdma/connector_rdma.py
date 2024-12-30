@@ -3,11 +3,11 @@ from vllm.config import MemPoolConfig
 import torch
 import rdma_client
 
-class Remote_connector():
+class RemoteConnector():
     def __init__(self, config: MemPoolConfig):
         self.client = rdma_client.RDMA_Client()
         self.client.client_prepare_connection(
-            config.port, config.host)
+            int(config.port), config.host)
         self.client.client_pre_post_recv()
         self.client.client_connect_to_server()
         self.client.client_xchange_metadata_with_server()

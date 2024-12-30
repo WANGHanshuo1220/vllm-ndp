@@ -40,6 +40,7 @@ from vllm.model_executor.layers.vocab_parallel_embedding import (
 from vllm.model_executor.model_loader.weight_utils import default_weight_loader
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
+from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
 
 import asyncio
 from vllm.utils import (get_distributed_init_method, get_ip, get_open_port,
@@ -68,6 +69,7 @@ class OPTAttention(nn.Module):
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ) -> None:
         super().__init__()
         self.embed_dim = embed_dim
@@ -97,7 +99,8 @@ class OPTAttention(nn.Module):
                               scale=self.scaling,
                               cache_config=cache_config,
                               quant_config=quant_config,
-                              mem_pool_config=mem_pool_config,)
+                              mem_pool_config=mem_pool_config,
+                              connector=connector)
 
     def forward(
         self,
@@ -126,6 +129,7 @@ class OPTDecoderLayer(nn.Module):
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ):
         super().__init__()
         self.config = config
@@ -137,6 +141,7 @@ class OPTDecoderLayer(nn.Module):
             cache_config=cache_config,
             quant_config=quant_config,
             mem_pool_config=mem_pool_config,
+            connector=connector
         )
         self.do_layer_norm_before = config.do_layer_norm_before
 
@@ -206,6 +211,7 @@ class OPTDecoder(nn.Module):
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ):
         super().__init__()
         self.config = config
@@ -250,7 +256,8 @@ class OPTDecoder(nn.Module):
             self.final_layer_norm = None
 
         self.layers = nn.ModuleList([
-            OPTDecoderLayer(config, cache_config, quant_config, mem_pool_config)
+            OPTDecoderLayer(config, cache_config, quant_config, mem_pool_config,
+                            connector=connector)
             for _ in range(config.num_hidden_layers)
         ])
 
@@ -296,6 +303,7 @@ class OPTModel(nn.Module):
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ):
         super().__init__()
         self.decoder = OPTDecoder(config, cache_config, 
@@ -329,12 +337,14 @@ class OPTForCausalLM(nn.Module):
         cache_config: Optional[CacheConfig] = None,
         quant_config: Optional[QuantizationConfig] = None,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ):
         super().__init__()
         self.config = config
         self.quant_config = quant_config
         self.model = OPTModel(config, cache_config, 
-                              quant_config, mem_pool_config)
+                              quant_config, mem_pool_config,
+                              connector=connector)
         if self.config.tie_word_embeddings:
             self.lm_head = self.model.decoder.embed_tokens
         else:

@@ -54,7 +54,7 @@ from vllm.usage.usage_lib import (UsageContext, is_usage_stats_enabled,
 from vllm.utils import Counter, Device
 from vllm.version import __version__ as VLLM_VERSION
 
-from vllm.mem_pool.tcp.connector import Remote_connector
+from vllm.mem_pool.tcp.connector import RemoteConnector
 from vllm.mem_pool.util import CPU_KVCACHE_DIMENSION
 import secrets
 
@@ -465,7 +465,7 @@ class LLMEngine:
         # For remote memory pool
         self.connector = None
         if self.mem_pool_config is not None:
-            self.connector = Remote_connector(self.mem_pool_config)
+            self.connector = RemoteConnector(self.mem_pool_config)
 
     def _initialize_kv_caches(self) -> None:
         """Initialize the KV cache in the worker(s).

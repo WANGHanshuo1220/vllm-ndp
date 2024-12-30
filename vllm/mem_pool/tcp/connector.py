@@ -19,7 +19,7 @@ AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 # [2, block_size, num_kv_heads, head_size]
 KVCAHE_DIMENSION: TypeAlias = List[List[List[List[float]]]]
 
-class Remote_connector():
+class RemoteConnector():
 
     def __init__(self, config: MemPoolConfig) -> None:
         self.host = config.host

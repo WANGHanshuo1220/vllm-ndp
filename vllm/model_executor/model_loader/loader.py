@@ -43,6 +43,7 @@ from vllm.model_executor.models.interfaces import (has_inner_state,
 from vllm.model_executor.utils import set_weight_attrs
 from vllm.platforms import current_platform
 from vllm.utils import is_pin_memory_available
+from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
 
 
 @contextmanager
@@ -150,7 +151,8 @@ def build_model(model_class: Type[nn.Module], hf_config: PretrainedConfig,
                 lora_config: Optional[LoRAConfig],
                 multimodal_config: Optional[MultiModalConfig],
                 scheduler_config: Optional[SchedulerConfig],
-                mem_pool_config: Optional[MemPoolConfig]) -> nn.Module:
+                mem_pool_config: Optional[MemPoolConfig],
+                connector: Optional[RemoteConnector]) -> nn.Module:
     extra_kwargs = _get_model_initialization_kwargs(model_class, lora_config,
                                                     multimodal_config,
                                                     scheduler_config)
@@ -159,6 +161,7 @@ def build_model(model_class: Type[nn.Module], hf_config: PretrainedConfig,
                        cache_config=cache_config,
                        quant_config=quant_config,
                        mem_pool_config=mem_pool_config,
+                       connector=connector,
                        **extra_kwargs)
 
 
@@ -168,7 +171,8 @@ def _initialize_model(
         lora_config: Optional[LoRAConfig],
         cache_config: CacheConfig,
         scheduler_config: Optional[SchedulerConfig] = None,
-        mem_pool_config: Optional[MemPoolConfig] = None) -> nn.Module:
+        mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None) -> nn.Module:
     """Initialize a model with the given configurations."""
     model_class, _ = get_model_architecture(model_config)
 
@@ -181,6 +185,7 @@ def _initialize_model(
         multimodal_config=model_config.multimodal_config,
         scheduler_config=scheduler_config,
         mem_pool_config=mem_pool_config,
+        connector=connector,
     )
 
 
@@ -356,14 +361,16 @@ class DefaultModelLoader(BaseModelLoader):
                    parallel_config: ParallelConfig,
                    scheduler_config: SchedulerConfig,
                    cache_config: CacheConfig,
-                   mem_pool_config: Optional[MemPoolConfig] = None) -> nn.Module:
+                   mem_pool_config: Optional[MemPoolConfig] = None,
+                   connector: Optional[RemoteConnector] = None) -> nn.Module:
         target_device = torch.device(device_config.device)
         with set_default_torch_dtype(model_config.dtype):
             with target_device:
                 model = _initialize_model(model_config, self.load_config,
                                           lora_config, cache_config,
                                           scheduler_config,
-                                          mem_pool_config=mem_pool_config)
+                                          mem_pool_config=mem_pool_config,
+                                          connector=connector)
             model.load_weights(
                 self._get_weights_iterator(model_config.model,
                                            model_config.revision,

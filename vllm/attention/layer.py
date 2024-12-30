@@ -12,7 +12,8 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 from vllm.model_executor.layers.quantization.kv_cache import BaseKVCacheMethod
 
-from vllm.mem_pool.tcp.connector import Remote_connector
+# from vllm.mem_pool.tcp.connector import RemoteConnector
+from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
 import asyncio
 
 class Attention(nn.Module):
@@ -42,6 +43,7 @@ class Attention(nn.Module):
         blocksparse_params: Optional[Dict[str, Any]] = None,
         logits_soft_cap: Optional[float] = None,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
         prefix: str = "",
     ) -> None:
         super().__init__()
@@ -99,7 +101,7 @@ class Attention(nn.Module):
         # Create attention pushdown session
         if (mem_pool_config is not None and \
             Attention._connector is None):
-            Attention._connector = Remote_connector(mem_pool_config)
+            Attention._connector = connector
 
     def forward(
         self,

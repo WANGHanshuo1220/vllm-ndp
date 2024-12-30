@@ -56,7 +56,8 @@ from vllm.worker.model_runner_base import (
     _init_sampling_metadata_from_tensor_dict, dump_input_when_exception)
 
 import asyncio
-from vllm.mem_pool.tcp.connector import Remote_connector
+# from vllm.mem_pool.tcp.connector import RemoteConnector
+from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
 from vllm.utils import make_async
 import threading        
 
@@ -926,6 +927,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         input_registry: InputRegistry = INPUT_REGISTRY,
         mm_registry: MultiModalRegistry = MULTIMODAL_REGISTRY,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ):
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -939,6 +941,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.return_hidden_states = return_hidden_states
         self.observability_config = observability_config
         self.mem_pool_config = mem_pool_config
+        self.connector = connector
 
         self.device = self.device_config.device
         self.pin_memory = is_pin_memory_available()
@@ -1010,11 +1013,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.transfer_task_handlers = {}
         self.finished_transfer = {}
         self.store_kv_event_loop = None
-        self.connector = None
         self.kv_transfer_time: dict[int, ] = {}
-        if self.mem_pool_config is not None:
-            self.store_kv_event_loop = asyncio.get_event_loop()
-            self.connector = Remote_connector(self.mem_pool_config)
         
         # Delta cached blocks in memory pool
         self.add_delta: List[int] = []
@@ -1031,7 +1030,8 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
                                    parallel_config=self.parallel_config,
                                    scheduler_config=self.scheduler_config,
                                    cache_config=self.cache_config,
-                                   mem_pool_config=self.mem_pool_config)
+                                   mem_pool_config=self.mem_pool_config,
+                                   connector=self.connector)
 
         self.model_memory_usage = m.consumed_memory
         logger.info("Loading model weights took %.4f GB",

@@ -53,6 +53,7 @@ from vllm.utils import is_hip
 
 from .interfaces import SupportsLoRA
 from .utils import PPMissingLayer, is_pp_missing_parameter, make_layers
+from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
 
 
 class LlamaMLP(nn.Module):
@@ -106,6 +107,7 @@ class LlamaAttention(nn.Module):
         cache_config: Optional[CacheConfig] = None,
         prefix: str = "",
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ) -> None:
         super().__init__()
         self.hidden_size = hidden_size
@@ -168,7 +170,8 @@ class LlamaAttention(nn.Module):
                               num_kv_heads=self.num_kv_heads,
                               cache_config=cache_config,
                               quant_config=quant_config,
-                              mem_pool_config=mem_pool_config)
+                              mem_pool_config=mem_pool_config,
+                              connector=connector)
 
     def forward(
         self,
@@ -197,6 +200,7 @@ class LlamaDecoderLayer(nn.Module):
         quant_config: Optional[QuantizationConfig] = None,
         prefix: str = "",
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ) -> None:
         super().__init__()
         self.hidden_size = config.hidden_size
@@ -226,6 +230,7 @@ class LlamaDecoderLayer(nn.Module):
             cache_config=cache_config,
             prefix=f"{prefix}.self_attn",
             mem_pool_config=mem_pool_config,
+            connector=connector
         )
         self.mlp = LlamaMLP(
             hidden_size=self.hidden_size,
@@ -283,6 +288,7 @@ class LlamaModel(nn.Module):
         lora_config: Optional[LoRAConfig] = None,
         prefix: str = "",
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ) -> None:
         super().__init__()
         self.config = config
@@ -307,7 +313,8 @@ class LlamaModel(nn.Module):
                                              cache_config=cache_config,
                                              quant_config=quant_config,
                                              prefix=prefix,
-                                             mem_pool_config=mem_pool_config),
+                                             mem_pool_config=mem_pool_config,
+                                             connector=connector),
             prefix=f"{prefix}.layers")
         if get_pp_group().is_last_rank:
             self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -420,6 +427,7 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA):
         quant_config: Optional[QuantizationConfig] = None,
         lora_config: Optional[LoRAConfig] = None,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        connector: Optional[RemoteConnector] = None,
     ) -> None:
         super().__init__()
 
@@ -431,7 +439,8 @@ class LlamaForCausalLM(nn.Module, SupportsLoRA):
                                 quant_config,
                                 lora_config=lora_config,
                                 prefix="model",
-                                mem_pool_config=mem_pool_config)
+                                mem_pool_config=mem_pool_config,
+                                connector=connector)
         if get_pp_group().is_last_rank:
             self.unpadded_vocab_size = config.vocab_size
             if lora_config:

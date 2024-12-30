@@ -2,9 +2,10 @@ from typing import Dict, List, TypeAlias, Optional, Tuple, Any
 from vllm.config import MemPoolConfig
 import torch
 import rdma_client
+import rdma_data_struct
 
 class RemoteConnector():
-    def __init__(self, config: MemPoolConfig):
+    def __init__(self, config: Optional[MemPoolConfig] = None):
         self.client = rdma_client.RDMA_Client()
         self.client.client_prepare_connection(
             int(config.port), config.host)

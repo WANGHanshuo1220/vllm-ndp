@@ -1575,7 +1575,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             to_transfer_tensor_list.append(seq_tensor_list)
 
         # TODO: get engine_id
-        engine_id = None
+        engine_id = 1
         seq_ids = list(block_tables.keys())
         seq_lengths = [len(sublist) for sublist in block_tables.values()]
         token_ids = [item for sublist in block_tables.values() for item in sublist]
@@ -1585,7 +1585,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         task = make_async(self._store_prefilled_kv, self.store_kv_event_loop)(
             engine_id, seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list
         )
-        self.transfer_task_handlers[seq_id] = task
+        print(engine_id, seq_ids, seq_lengths, token_ids, free_seq_ids)
+        for seq_id in seq_ids:
+            self.transfer_task_handlers[seq_id] = task
 
     @torch.inference_mode()
     @dump_input_when_exception(exclude_args=[0], exclude_kwargs=["self"])

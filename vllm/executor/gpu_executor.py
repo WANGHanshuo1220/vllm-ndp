@@ -39,7 +39,7 @@ class GPUExecutor(ExecutorBase):
 
         self.connector = None
         if self.mem_pool_config is not None:
-            self.connector = RemoteConnector()
+            self.connector = RemoteConnector(self.mem_pool_config)
 
         self.driver_worker = self._create_worker()
         self.driver_worker.init_device()

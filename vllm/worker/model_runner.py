@@ -1577,8 +1577,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # TODO: get engine_id
         engine_id = 1
         seq_ids = list(block_tables.keys())
-        seq_lengths = [len(sublist) for sublist in block_tables.values()]
-        token_ids = [item for sublist in block_tables.values() for item in sublist]
+        seq_lengths = [len(sublist) for sublist in seq_id_to_tokens.values()]
+        token_ids = [item for sublist in seq_id_to_tokens.values() for item in sublist]
         free_seq_ids = to_free_seq_list
         tensor_list = to_transfer_tensor_list
 

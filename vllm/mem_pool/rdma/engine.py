@@ -26,6 +26,12 @@ class cpu_engine():
         self.parallel_config: ParallelConfig = engine_config.parallel_config
         self.cache_config: CacheConfig = engine_config.cache_config
 
+        self.cpu_kv_dimension = \
+            (self.cache_config.block_size *
+             self.model_config.get_num_attention_heads(
+                 self.parallel_config) *
+             self.model_config.get_head_size())
+
         torch.set_default_dtype(torch.bfloat16)
         self.shared_resources = shared_resources
         self.attention_unit = self._create_attention()
@@ -80,6 +86,7 @@ class cpu_engine():
         tensor_list = recv_handler.get_tensor()
         to_free_seq_ids = recv_handler.get_to_free_seq_ids()
         seq_lengths = recv_handler.get_seq_lengths()
+        print(seq_ids, token_ids, to_free_seq_ids, seq_lengths)
 
         assert(len(seq_ids) == len(seq_lengths))
         assert(len(seq_ids) == len(tensor_list))
@@ -135,7 +142,7 @@ class cpu_engine():
                 assert False, "Abort exception is not implemented yet"
 
             # 3. Store tensors to cpu cache
-            allocated_blocks = self.shared_resources.get_block_table(sequence)
+            allocated_blocks = self.shared_resources.get_blocks(sequence)
             blocks_reusable = self.shared_resources.get_block_reusable(sequence)
             assert len(allocated_blocks) == len(blocks_reusable)
             assert len(allocated_blocks) == len(seq_kv_blocks)
@@ -192,13 +199,13 @@ class cpu_engine():
         query, key, value = recv_handler.get_tensor()
 
         seq_lens = recv_handler.get_seq_lengths()
-        seq_len_tensor = torch.tensor(seq_lens)
+        seq_len_tensor = torch.tensor(seq_lens, dtype=torch.int32)
         max_decode_seq_len = recv_handler.get_max_decode_seq_len()
         num_decode_tokens = recv_handler.get_num_decode_tokens()
+        print(seq_lens, max_decode_seq_len, num_decode_tokens)
 
         cpu_attn_metadata = self._create_cpu_attn_metadata(
-            seq_lens_tensor=torch.tensor(seq_len_tensor, 
-                                         dtype=torch.int32),
+            seq_lens_tensor=seq_len_tensor,
             max_decode_seq_len=max_decode_seq_len,
             num_decode_tokens=num_decode_tokens,
             seq_lens=seq_lens
@@ -219,7 +226,7 @@ class cpu_engine():
 
         _block_tables = []
         _slot_mapping = []
-        for i in enumerate(len(seq_ids)):
+        for i in range(len(seq_ids)):
             seq_id = seq_ids[i]
             token_ids = seqs_token_ids[i]
 
@@ -245,7 +252,7 @@ class cpu_engine():
                     sequence, num_lookahead_slots=0)
 
             # 3. Get block info and slot_mapping to attn_matadata
-            block_ids = self.shared_resources.get_block_table(sequence)
+            block_ids = self.shared_resources.get_blocks(sequence)
             _block_tables.append(block_ids)
 
             offset = seq_lens[i] 
@@ -269,6 +276,6 @@ class cpu_engine():
         # 4. Attention computation
         layer = recv_handler.get_layer_id()
         output = self.attention_unit(query, key, value,
-                                     self.shared_resources.get_kv_cache_layer[layer],
+                                     self.shared_resources.get_kv_cache_layer(layer),
                                      cpu_attn_metadata)
         return output

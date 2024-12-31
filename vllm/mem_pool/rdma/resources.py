@@ -77,11 +77,13 @@ class Shared_mem_resources():
         kv_cache_size = rdma_data_struct.KVCacheMrSize
         qkv_size = rdma_data_struct.QKVMrSize
         output_size = rdma_data_struct.OutputSize
+        cache_info = rdma_data_struct.CacheInfoSize
 
-        max_size = max(kv_cache_size, qkv_size)
+        max_size1 = max(kv_cache_size, qkv_size)
+        max_size2 = max(output_size, cache_info)
 
         memory_info = psutil.virtual_memory()
-        return (memory_info.available - max_size - output_size) * \
+        return (memory_info.available - 2*max_size1 - 2*max_size2) * \
             self.cache_config.gpu_memory_utilization
     
     """ cache engine functions """
@@ -92,7 +94,7 @@ class Shared_mem_resources():
         block_id: int,
         layer_tensor: torch.tensor,
     ) -> None:
-        self.cache_enigne.cpu_cache[layer_id][:block_id,:] = layer_tensor
+        self.cache_enigne.cpu_cache[layer_id][:,block_id,:] = layer_tensor
 
     def get_kv_cache_layer(
         self,
@@ -108,6 +110,13 @@ class Shared_mem_resources():
         seq_id: int,
     ) -> BlockTable:
         return self.block_manager.block_tables[seq_id]
+
+
+    def get_blocks(
+        self,
+        seq: Sequence,
+    ) -> BlockTable:
+        return self.block_manager.get_block_table(seq)
 
     
     def free_seq(
@@ -134,10 +143,10 @@ class Shared_mem_resources():
     def can_append_slots(
         self,
         seq_group: SequenceGroup,
-        num_lookahead_slot: int
+        num_lookahead_slots: int
     ) -> AllocStatus:
-        return self.block_manager.can_allocate_slots(seq_group, 
-                                                     num_lookahead_slot)
+        return self.block_manager.can_append_slots(seq_group, 
+                                                     num_lookahead_slots)
 
 
     def allocate(
@@ -150,17 +159,10 @@ class Shared_mem_resources():
     def append_slots(
         self,
         seq_group: SequenceGroup,
-        num_lookahead_slot: int
+        num_lookahead_slots: int
     ) -> None:
         self.block_manager.append_slots(seq_group,
-                                        num_lookahead_slot)
-
-
-    def get_block_table(
-        self,
-        seq: Sequence
-    ) -> List[int]:
-        return self.block_manager.get_block_table(seq)
+                                        num_lookahead_slots)
 
 
     def get_block_reusable(

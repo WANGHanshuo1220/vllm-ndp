@@ -72,3 +72,94 @@ class RemoteConnector():
 
         self.client.client_remote_data_processing()
         return self.output_handler.get_tensor()
+
+BLOCK_SIZE = rdma_data_struct.BLOCK_SIZE
+MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
+MAX_SEQ_LENGTH = rdma_data_struct.MAX_SEQ_LENGTH
+HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
+NUM_HEADS = rdma_data_struct.NUM_HEADS
+NUM_LAYER = rdma_data_struct.NUM_LAYER
+
+def run_prefill(client):
+    engine_id = 1
+    seq_ids = [0, 1, 2]
+    seq_lengths = [4, 7, 9]
+    token_ids = [1, 2, 3, 4,
+                 1, 2, 3, 4, 5, 6, 7,
+                 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    free_seq_ids = []
+
+    seq_num_blocks = []
+    for seq_length in seq_lengths:
+        seq_num_blocks.append((seq_length + BLOCK_SIZE - 1) // BLOCK_SIZE)
+
+    input_tensor = []
+    for i in range(len(seq_ids)):
+        num_blocks = seq_num_blocks[i]
+        seq_blocks = []
+        for block_idx in range(num_blocks):
+            block_layers = []
+            for j in range(NUM_LAYER):
+                layer_tensor = torch.rand(
+                    [2, BLOCK_SIZE, NUM_HEADS, HIDDEN_SIZE//NUM_HEADS],
+                    dtype=torch.float16
+                )
+                block_layers.append(layer_tensor)
+            seq_blocks.append(block_layers)
+        input_tensor.append(seq_blocks)
+    
+    client.store_kv(
+        engine_id,
+        seq_ids,
+        seq_lengths,
+        token_ids,
+        free_seq_ids,
+        input_tensor
+    )
+    
+def run_decode(client):
+    max_decode_seq_len = 9
+    num_decode_tokens = 3
+    layer_id = 0
+    seq_ids = [0, 1, 2]
+    seq_lengths = [4, 7, 9]
+    token_ids = [1, 2, 3, 4,
+                 1, 2, 3, 4, 5, 6, 7,
+                 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    
+    seq_data = {}
+    start = 0
+    for i in range(len(seq_ids)):
+        end = start + seq_lengths[i]
+        seq_data[i] = token_ids[start:end]
+        start = end
+
+    input_tensor = []
+    for i in range(3):
+        tensor = torch.rand(
+            [len(seq_ids), HIDDEN_SIZE],
+            dtype=torch.float16
+        )
+        input_tensor.append(tensor)
+
+    client.compute_attention(
+        input_tensor[0],
+        input_tensor[1],
+        input_tensor[2],
+        torch.tensor(seq_lengths),
+        max_decode_seq_len,
+        num_decode_tokens,
+        seq_lengths,
+        seq_data,
+        layer_id,
+    )
+
+if __name__=="__main__":
+    config = MemPoolConfig.may_be_create(True, "172.16.253.26", "3389")
+    client = RemoteConnector(config) 
+
+    # prefill
+    run_prefill(client)
+    
+    # decode
+    run_decode(client)

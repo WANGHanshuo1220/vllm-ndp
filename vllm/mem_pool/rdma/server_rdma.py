@@ -34,21 +34,25 @@ def client_loop(
 
     server.prepare_send_data_wr(client_id)
     first = True
-    output_handler = server.get_send_output_handler(client_id)
     while (not server.check_client_disconnected(client_id)):
 
         if first:
             server.wait_completion_event(1, client_id)
+            server.update_client_status(client_id)
+            if (server.check_client_disconnected(client_id)):
+                break
             first = False
 
         # Processing data
         if (server.is_prefill_kv_cache(client_id)):
+            print("recieve a prefill")
             # This is a prefill save kv cache request
             recv_handler = server.get_recv_kv_cache_handler(client_id)
             send_handler = server.get_send_cache_info_handler(client_id)
             engine.save_kv_cache(recv_handler, send_handler)
             # recv_handler.pretty_print()
         else:
+            print("recieve a decode")
             # This is a decode attention computation request
             recv_handler = server.get_recv_qkv_handler(client_id)
             send_handler = server.get_send_output_handler(client_id)

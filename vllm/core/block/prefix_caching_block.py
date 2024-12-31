@@ -895,7 +895,8 @@ class PrefixCachingBlock(Block):
 
         _hash_str = hashlib.sha256(input_str.encode())
         _hash = int.from_bytes(_hash_str.digest(), byteorder='big')
-        return _hash
+        _hash_32bit = _hash & 0xFFFFFFFF  # Masking: keep only the lower 32 bits
+        return _hash_32bit
 
 
 class ComputedBlocksTracker:

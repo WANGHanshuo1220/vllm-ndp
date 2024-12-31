@@ -82,11 +82,9 @@ NUM_LAYER = rdma_data_struct.NUM_LAYER
 
 def run_prefill(client):
     engine_id = 1
-    seq_ids = [0, 1, 2]
-    seq_lengths = [4, 7, 9]
-    token_ids = [1, 2, 3, 4,
-                 1, 2, 3, 4, 5, 6, 7,
-                 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    seq_ids = [0]
+    seq_lengths = [42]
+    token_ids = [i+100 for i in range(seq_lengths[0])]
     free_seq_ids = []
 
     seq_num_blocks = []
@@ -162,4 +160,4 @@ if __name__=="__main__":
     run_prefill(client)
     
     # decode
-    run_decode(client)
+    # run_decode(client)

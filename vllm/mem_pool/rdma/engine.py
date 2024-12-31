@@ -151,8 +151,8 @@ class cpu_engine():
                 seq_id, allocated_blocks, blocks_reusable, seq_kv_blocks
             )
 
-            add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta()
-            send_handler.set_all(add_delta, pop_delta)
+        add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta()
+        send_handler.set_all(add_delta, pop_delta)
 
             
     def _create_cpu_attn_metadata(

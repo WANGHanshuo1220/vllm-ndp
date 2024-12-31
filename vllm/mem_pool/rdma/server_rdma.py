@@ -51,6 +51,7 @@ def client_loop(
             send_handler = server.get_send_cache_info_handler(client_id)
             engine.save_kv_cache(recv_handler, send_handler)
             # recv_handler.pretty_print()
+            # send_handler.pretty_print()
         else:
             print("recieve a decode")
             # This is a decode attention computation request

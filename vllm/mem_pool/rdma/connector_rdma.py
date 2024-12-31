@@ -4,6 +4,13 @@ import torch
 import rdma_client
 import rdma_data_struct
 
+BLOCK_SIZE = rdma_data_struct.BLOCK_SIZE
+MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
+MAX_SEQ_LENGTH = rdma_data_struct.MAX_SEQ_LENGTH
+HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
+NUM_HEADS = rdma_data_struct.NUM_HEADS
+NUM_LAYER = rdma_data_struct.NUM_LAYER
+
 class RemoteConnector():
     def __init__(self, config: Optional[MemPoolConfig] = None):
         self.client = rdma_client.RDMA_Client()
@@ -30,6 +37,21 @@ class RemoteConnector():
         tensors: List[List[List[torch.tensor]]],
     ) -> None:
         self.client.set_prefill()
+
+        print("chack assert")
+        assert(len(seq_ids) == len(seq_lengths))
+        assert(len(token_ids) == sum(seq_lengths))
+
+        assert(len(tensors) == len(seq_ids))
+        for i, seq_length in enumerate(seq_lengths):
+            num_blocks = (seq_length + BLOCK_SIZE - 1) // BLOCK_SIZE
+            assert(len(tensors[i]) == num_blocks)
+            for block_layers in tensors[i]:
+                assert(len(block_layers) == NUM_LAYER)
+                for t in block_layers:
+                    assert(t.shape == (2, BLOCK_SIZE, NUM_HEADS, HIDDEN_SIZE//NUM_HEADS))
+        print("chack assert done")
+
         self.prefill_handler.set_all(
             engine_id,
             seq_ids,
@@ -38,7 +60,9 @@ class RemoteConnector():
             free_seq_ids,
             tensors
         )
+        print("set handler")
         self.client.client_remote_data_processing()
+        print("return")
     
     def compute_attention(
         self,
@@ -72,13 +96,6 @@ class RemoteConnector():
 
         self.client.client_remote_data_processing()
         return self.output_handler.get_tensor()
-
-BLOCK_SIZE = rdma_data_struct.BLOCK_SIZE
-MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
-MAX_SEQ_LENGTH = rdma_data_struct.MAX_SEQ_LENGTH
-HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
-NUM_HEADS = rdma_data_struct.NUM_HEADS
-NUM_LAYER = rdma_data_struct.NUM_LAYER
 
 def run_prefill(client):
     engine_id = 1
@@ -153,7 +170,7 @@ def run_decode(client):
     )
 
 if __name__=="__main__":
-    config = MemPoolConfig.may_be_create(True, "172.16.253.26", "3389")
+    config = MemPoolConfig.may_be_create(True, "172.16.253.36", "3389")
     client = RemoteConnector(config) 
 
     # prefill

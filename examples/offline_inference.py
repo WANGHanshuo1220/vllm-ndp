@@ -12,6 +12,7 @@ prompts = [
 # Create a sampling params object.
 sampling_params = SamplingParams(temperature=0, top_p=1)
 
+# mark
 # Create an LLM.
 # llm = LLM(model="/root/models/Llama-3.1-8B-Instruct", 
 llm = LLM(model="facebook/opt-125m",

@@ -195,8 +195,11 @@ class cpu_engine():
         self,
         recv_handler: rdma_data_struct.ClientSendQKV,
         send_handler: rdma_data_struct.ClientRecvOutput,
-    ) -> torch.tensor:
-        query, key, value = recv_handler.get_tensor()
+    ) -> None:
+        qkv = recv_handler.get_tensor()
+        query = qkv[0]
+        key = qkv[1]
+        value = qkv[2]
 
         seq_lens = recv_handler.get_seq_lengths()
         seq_len_tensor = torch.tensor(seq_lens, dtype=torch.int32)
@@ -278,4 +281,4 @@ class cpu_engine():
         output = self.attention_unit(query, key, value,
                                      self.shared_resources.get_kv_cache_layer(layer),
                                      cpu_attn_metadata)
-        return output
+        send_handler.set_all(output)

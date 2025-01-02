@@ -86,7 +86,6 @@ class cpu_engine():
         tensor_list = recv_handler.get_tensor()
         to_free_seq_ids = recv_handler.get_to_free_seq_ids()
         seq_lengths = recv_handler.get_seq_lengths()
-        print(seq_ids, token_ids, to_free_seq_ids, seq_lengths)
 
         assert(len(seq_ids) == len(seq_lengths))
         assert(len(seq_ids) == len(tensor_list))
@@ -205,7 +204,6 @@ class cpu_engine():
         seq_len_tensor = torch.tensor(seq_lens, dtype=torch.int32)
         max_decode_seq_len = recv_handler.get_max_decode_seq_len()
         num_decode_tokens = recv_handler.get_num_decode_tokens()
-        print(seq_lens, max_decode_seq_len, num_decode_tokens)
 
         cpu_attn_metadata = self._create_cpu_attn_metadata(
             seq_lens_tensor=seq_len_tensor,
@@ -281,4 +279,4 @@ class cpu_engine():
         output = self.attention_unit(query, key, value,
                                      self.shared_resources.get_kv_cache_layer(layer),
                                      cpu_attn_metadata)
-        send_handler.set_all(output)
+        send_handler.set_all(query.shape[0], output)

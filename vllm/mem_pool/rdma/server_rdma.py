@@ -45,7 +45,6 @@ def client_loop(
 
         # Processing data
         if (server.is_prefill_kv_cache(client_id)):
-            print("recieve a prefill")
             # This is a prefill save kv cache request
             recv_handler = server.get_recv_kv_cache_handler(client_id)
             send_handler = server.get_send_cache_info_handler(client_id)
@@ -53,7 +52,6 @@ def client_loop(
             # recv_handler.pretty_print()
             # send_handler.pretty_print()
         else:
-            print("recieve a decode")
             # This is a decode attention computation request
             recv_handler = server.get_recv_qkv_handler(client_id)
             send_handler = server.get_send_output_handler(client_id)

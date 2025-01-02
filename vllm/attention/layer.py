@@ -134,7 +134,7 @@ class Attention(nn.Module):
                 num_decode_tokens=attn_metadata.num_decode_tokens,
                 seq_lens=attn_metadata.seq_lens,
                 seqs_data=seqs_data,
-                layer=layer
+                layer_id=layer
             )
             # FIXME:if we have multiple GPUs, we should do extra work
             res = res.to(dtype=self.dtype, device="cuda")

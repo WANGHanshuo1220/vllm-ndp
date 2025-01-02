@@ -307,7 +307,8 @@ class OPTModel(nn.Module):
     ):
         super().__init__()
         self.decoder = OPTDecoder(config, cache_config, 
-                                  quant_config, mem_pool_config)
+                                  quant_config, mem_pool_config,
+                                  connector=connector)
 
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.decoder.get_input_embeddings(input_ids)

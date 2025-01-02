@@ -19,7 +19,7 @@ llm = LLM(model="facebook/opt-125m",
           use_v2_block_manager=True,
           enable_prefix_caching=True,
           enable_chunked_prefill=False,
-          mp_enable=True, mp_host="172.16.253.26", mp_port="3389")
+          mp_enable=True, mp_host="172.16.253.12", mp_port="3389")
 
 prompts = [
     "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",

@@ -23,6 +23,7 @@ class RemoteConnector():
         self.prefill_handler = self.client.get_send_kv_cache_handler()
         self.decode_handler = self.client.get_send_qkv_handler()
         self.output_handler = self.client.get_recv_output_handler()
+        self.cache_info_handler = self.client.get_recv_cache_info_handler()
     
     def __del__(self):
         self.client.client_disconnect_and_clean()
@@ -35,10 +36,9 @@ class RemoteConnector():
         token_ids: List[int],
         free_seq_ids: List[int],
         tensors: List[List[List[torch.tensor]]],
-    ) -> None:
+    ) -> Tuple[List[int], List[int]]:
         self.client.set_prefill()
 
-        print("chack assert")
         assert(len(seq_ids) == len(seq_lengths))
         assert(len(token_ids) == sum(seq_lengths))
 
@@ -50,7 +50,6 @@ class RemoteConnector():
                 assert(len(block_layers) == NUM_LAYER)
                 for t in block_layers:
                     assert(t.shape == (2, BLOCK_SIZE, NUM_HEADS, HIDDEN_SIZE//NUM_HEADS))
-        print("chack assert done")
 
         self.prefill_handler.set_all(
             engine_id,
@@ -60,9 +59,10 @@ class RemoteConnector():
             free_seq_ids,
             tensors
         )
-        print("set handler")
         self.client.client_remote_data_processing()
-        print("return")
+        add_delta = self.cache_info_handler.get_add_delta()
+        pop_delta = self.cache_info_handler.get_pop_delta()
+        return (add_delta, pop_delta)
     
     def compute_attention(
         self,

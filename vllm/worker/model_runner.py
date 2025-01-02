@@ -1014,6 +1014,8 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.finished_transfer = {}
         self.store_kv_event_loop = None
         self.kv_transfer_time: dict[int, ] = {}
+        if self.mem_pool_config is not None:
+            self.store_kv_event_loop = asyncio.get_event_loop()
         
         # Delta cached blocks in memory pool
         self.add_delta: List[int] = []
@@ -1532,12 +1534,11 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         for seq_id in seq_ids:
             self.kv_transfer_time[seq_id] = time.time()
             logger.info(f"send {seq_id} at {time.time():.4f}")
-        response = self.connector.store_kv(
+        (add_delta, pop_delta) = self.connector.store_kv(
             engine_id, seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list)
-        if response["has_result"]:
-            with self.delta_lock:
-                self.add_delta.extend(response["add_delta"])
-                self.pop_delta.extend(response["pop_delta"])
+        with self.delta_lock:
+            self.add_delta.extend(add_delta)
+            self.pop_delta.extend(pop_delta)
         #     print(f"recieved from mp: {response['add_delta']}, {response['pop_delta']}")
         # else:
         #     print(f"Don't have response: {response['has_result']}")

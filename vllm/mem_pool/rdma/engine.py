@@ -19,12 +19,15 @@ class cpu_engine():
     def __init__(
         self, 
         engine_config: EngineConfig,
-        shared_resources: Shared_mem_resources
+        shared_resources: Shared_mem_resources,
+        tp_rank: int,
     ) -> None:
         self.model_config: ModelConfig = engine_config.model_config
         self.mem_pool_config: MemPoolConfig = engine_config.mem_pool_config
         self.parallel_config: ParallelConfig = engine_config.parallel_config
         self.cache_config: CacheConfig = engine_config.cache_config
+
+        self.tp_rank = tp_rank
 
         self.cpu_kv_dimension = \
             (self.cache_config.block_size *
@@ -73,7 +76,7 @@ class cpu_engine():
             if not blocks_reusable[i]:
                 for j in range(len(layer_tensors)):
                     tensor = layer_tensors[j].view(2, self.cpu_kv_dimension)
-                    self.shared_resources.set_kv_tensor(j, block_id, tensor)
+                    self.shared_resources.set_kv_tensor(j, block_id, tensor, self.tp_rank)
 
 
     def save_kv_cache(
@@ -93,14 +96,14 @@ class cpu_engine():
 
         # First free blocks of finished seqs
         for to_free_seq_id in to_free_seq_ids:
-            block_table = self.shared_resources.get_block_table(to_free_seq_id)
+            block_table = self.shared_resources.get_block_table(to_free_seq_id, self.tp_rank)
             to_free_token_ids = block_table._get_all_token_ids()
             to_free_sequence = Sequence(
                 seq_id=to_free_seq_id,
                 inputs={"prompt_token_ids": to_free_token_ids},
                 block_size=self.cache_config.block_size,
             )
-            self.shared_resources.free_seq(to_free_sequence)
+            self.shared_resources.free_seq(to_free_sequence, self.tp_rank)
 
         seqs_token_ids = []
         start = 0
@@ -129,20 +132,20 @@ class cpu_engine():
             )
 
             # 1. Check if we can allocate blocks for this seq
-            can_allocate = self.shared_resources.can_allocate(seq_group)
+            can_allocate = self.shared_resources.can_allocate(seq_group, self.tp_rank)
 
             # 2. Allocate if we can and free some blocks if neccessary
             if can_allocate == AllocStatus.OK:
                 # allocate blocks
-                self.shared_resources.allocate(seq_group)
+                self.shared_resources.allocate(seq_group, self.tp_rank)
             elif can_allocate == AllocStatus.LATER:
                 assert False, "Store KV later is not implemented yet"
             else:
                 assert False, "Abort exception is not implemented yet"
 
             # 3. Store tensors to cpu cache
-            allocated_blocks = self.shared_resources.get_blocks(sequence)
-            blocks_reusable = self.shared_resources.get_block_reusable(sequence)
+            allocated_blocks = self.shared_resources.get_blocks(sequence, self.tp_rank)
+            blocks_reusable = self.shared_resources.get_block_reusable(sequence, self.tp_rank)
             assert len(allocated_blocks) == len(blocks_reusable)
             assert len(allocated_blocks) == len(seq_kv_blocks)
 
@@ -150,7 +153,7 @@ class cpu_engine():
                 seq_id, allocated_blocks, blocks_reusable, seq_kv_blocks
             )
 
-        add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta()
+        add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta(self.tp_rank)
         send_handler.set_all(add_delta, pop_delta)
 
             
@@ -243,17 +246,17 @@ class cpu_engine():
             )
 
             # 2. Allocate blocks if necessary
-            while not self.shared_resources.has_seq(sequence):
+            while not self.shared_resources.has_seq(sequence, self.tp_rank):
                 assert False, "seqs does not exist"
             else:
                 assert self.shared_resources.can_append_slots(
-                    seq_group, num_lookahead_slots=0)
+                    seq_group, num_lookahead_slots=0, tp_rank=self.tp_rank)
             
                 self.shared_resources.append_slots(
-                    sequence, num_lookahead_slots=0)
+                    sequence, num_lookahead_slots=0, tp_rank=self.tp_rank)
 
             # 3. Get block info and slot_mapping to attn_matadata
-            block_ids = self.shared_resources.get_blocks(sequence)
+            block_ids = self.shared_resources.get_blocks(sequence, self.tp_rank)
             _block_tables.append(block_ids)
 
             offset = seq_lens[i] 
@@ -276,7 +279,8 @@ class cpu_engine():
 
         # 4. Attention computation
         layer = recv_handler.get_layer_id()
-        output = self.attention_unit(query, key, value,
-                                     self.shared_resources.get_kv_cache_layer(layer),
-                                     cpu_attn_metadata)
+        output = self.attention_unit(
+            query, key, value,
+            self.shared_resources.get_kv_cache_layer(layer, self.tp_rank),
+            cpu_attn_metadata)
         send_handler.set_all(query.shape[0], output)

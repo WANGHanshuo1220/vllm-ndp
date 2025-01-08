@@ -12,13 +12,22 @@ NUM_HEADS = rdma_data_struct.NUM_HEADS
 NUM_LAYER = rdma_data_struct.NUM_LAYER
 
 class RemoteConnector():
-    def __init__(self, config: Optional[MemPoolConfig] = None):
+    def __init__(
+        self, 
+        config: Optional[MemPoolConfig] = None,
+        engine_id: Optional[int] = None,
+        tp_rank: Optional[int] = None,
+    ):
+        self.engine_id = engine_id
+        self.tp_rank = tp_rank
+
         self.client = rdma_client.RDMA_Client()
         self.client.client_prepare_connection(
             int(config.port), config.host)
         self.client.client_pre_post_recv()
         self.client.client_connect_to_server()
-        self.client.client_xchange_metadata_with_server()
+        self.client.client_xchange_metadata_with_server(
+            self.engine_id, self.tp_rank)
 
         self.prefill_handler = self.client.get_send_kv_cache_handler()
         self.decode_handler = self.client.get_send_qkv_handler()
@@ -30,7 +39,6 @@ class RemoteConnector():
     
     def store_kv(
         self,
-        engine_id: int,
         seq_ids: List[int],
         seq_lengths: List[int],
         token_ids: List[int],
@@ -52,7 +60,8 @@ class RemoteConnector():
                     assert(t.shape == (2, BLOCK_SIZE, NUM_HEADS, HIDDEN_SIZE//NUM_HEADS))
 
         self.prefill_handler.set_all(
-            engine_id,
+            self.engine_id,
+            self.tp_rank,
             seq_ids,
             seq_lengths,
             token_ids,
@@ -85,6 +94,7 @@ class RemoteConnector():
         tensor = [query, key, value]
 
         self.decode_handler.set_all(
+            self.tp_rank,
             max_decode_seq_len,
             num_decode_tokens,
             layer_id,

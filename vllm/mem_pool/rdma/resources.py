@@ -21,12 +21,14 @@ class Shared_mem_resources():
     def __init__(
         self,
         engine_config: EngineConfig,
+        connections: int,
     ) -> None:
         self.model_config: ModelConfig = engine_config.model_config
         self.cache_config: CacheConfig = engine_config.cache_config
         self.mem_pool_config: MemPoolConfig = engine_config.mem_pool_config
         self.parallel_config: ParallelConfig = engine_config.parallel_config
         self.device_config: DeviceConfig = engine_config.device_config
+        self.connections = connections
 
         self.dimension = (self.cache_config.block_size *
                           self.model_config.get_num_attention_heads(
@@ -34,8 +36,14 @@ class Shared_mem_resources():
                           self.model_config.get_head_size())
 
         torch.set_default_dtype(torch.bfloat16)
-        self.cache_enigne = self._create_cache_engine()
-        self.block_manager = self._create_block_manager()
+        self.cache_enigne = []
+        self.block_manager = []
+
+        # Now we only support tp
+        self.tp_size = self.parallel_config.tensor_parallel_size
+        for _ in range(self.tp_size):
+            self.cache_enigne.append(self._create_cache_engine())
+            self.block_manager.append(self._create_block_manager())
 
 
     def _create_cache_engine(self) -> CPUCacheEngine:
@@ -72,19 +80,34 @@ class Shared_mem_resources():
             sliding_window=self.cache_config.sliding_window,
             enable_caching=True)
 
+    
+    def _get_reserved_cpu_memory(self):
+        """ Reserved memory for RDMA register MR """
+        KVCacheMetaSize = rdma_data_struct.KVCacheMetaSize
+        KVCacheTensorSize = rdma_data_struct.KVCacheTensorSize
+        kv_cache_size = KVCacheMetaSize + KVCacheTensorSize // self.tp_size
 
-    def _get_available_cpu_memory(self):
-        kv_cache_size = rdma_data_struct.KVCacheMrSize
-        qkv_size = rdma_data_struct.QKVMrSize
-        output_size = rdma_data_struct.OutputSize
+        QKVMetaSize = rdma_data_struct.QKVMetaSize
+        QKVTensorSize = rdma_data_struct.QKVTensorSize
+        qkv_size = QKVMetaSize + QKVTensorSize // self.tp_size
+
+        OutputMetaSize = rdma_data_struct.OutputMetaSize
+        OutputTensorSize = rdma_data_struct.OutputTensorSize
+        output_size = OutputMetaSize + OutputTensorSize // self.tp_size
+
         cache_info = rdma_data_struct.CacheInfoSize
 
         max_size1 = max(kv_cache_size, qkv_size)
         max_size2 = max(output_size, cache_info)
 
+        return self.connections * (max_size1 + max_size2)
+
+
+    def _get_available_cpu_memory(self):
         memory_info = psutil.virtual_memory()
-        return (memory_info.available - 2*max_size1 - 2*max_size2) * \
-            self.cache_config.gpu_memory_utilization
+        return (memory_info.available - 
+                self._get_reserved_cpu_memory()) // self.tp_size * \
+                self.cache_config.gpu_memory_utilization
     
     """ cache engine functions """
     
@@ -93,14 +116,16 @@ class Shared_mem_resources():
         layer_id: int,
         block_id: int,
         layer_tensor: torch.tensor,
+        tp_rank: int,
     ) -> None:
-        self.cache_enigne.cpu_cache[layer_id][:,block_id,:] = layer_tensor
+        self.cache_enigne[tp_rank].cpu_cache[layer_id][:,block_id,:] = layer_tensor
 
     def get_kv_cache_layer(
         self,
-        layer_id: int
+        layer_id: int,
+        tp_rank: int,
     ) -> torch.tensor:
-        return self.cache_enigne.cpu_cache[layer_id]
+        return self.cache_enigne[tp_rank].cpu_cache[layer_id]
 
     
     """ block manager functions """
@@ -108,73 +133,83 @@ class Shared_mem_resources():
     def get_block_table(
         self,
         seq_id: int,
+        tp_rank: int,
     ) -> BlockTable:
-        return self.block_manager.block_tables[seq_id]
+        return self.block_manager[tp_rank].block_tables[seq_id]
 
 
     def get_blocks(
         self,
         seq: Sequence,
+        tp_rank: int,
     ) -> BlockTable:
-        return self.block_manager.get_block_table(seq)
+        return self.block_manager[tp_rank].get_block_table(seq)
 
     
     def free_seq(
         self,
-        seq: Sequence
+        seq: Sequence,
+        tp_rank: int,
     ) -> None:
-        self.block_manager.free(seq)
+        self.block_manager[tp_rank].free(seq)
 
 
     def has_seq(
         self,
-        seq: Sequence
+        seq: Sequence,
+        tp_rank: int,
     ) -> bool:
-        return self.block_manager.has_seq(seq)
+        return self.block_manager[tp_rank].has_seq(seq)
 
     
     def can_allocate(
         self,
         seq_group: SequenceGroup,
+        tp_rank: int,
     ) -> AllocStatus:
-        return self.block_manager.can_allocate(seq_group)
+        return self.block_manager[tp_rank].can_allocate(seq_group)
 
 
     def can_append_slots(
         self,
         seq_group: SequenceGroup,
-        num_lookahead_slots: int
+        num_lookahead_slots: int,
+        tp_rank: int,
     ) -> AllocStatus:
-        return self.block_manager.can_append_slots(seq_group, 
+        return self.block_manager[tp_rank].can_append_slots(seq_group, 
                                                      num_lookahead_slots)
 
 
     def allocate(
         self,
         seq_group: SequenceGroup,
+        tp_rank: int,
     ) -> None:
-        self.block_manager.allocate(seq_group)
+        self.block_manager[tp_rank].allocate(seq_group)
 
 
     def append_slots(
         self,
         seq_group: SequenceGroup,
-        num_lookahead_slots: int
+        num_lookahead_slots: int,
+        tp_rank: int,
     ) -> None:
-        self.block_manager.append_slots(seq_group,
+        self.block_manager[tp_rank].append_slots(seq_group,
                                         num_lookahead_slots)
 
 
     def get_block_reusable(
         self,
-        seq: Sequence
+        seq: Sequence,
+        tp_rank: int,
     ) -> List[bool]:
-        return self.block_manager.get_block_reusable(seq)
+        return self.block_manager[tp_rank].get_block_reusable(seq)
     
     
     def get_cached_blocks_delta(
-        self
+        self,
+        tp_rank: int,
     ) -> Tuple[List[int], List[int]]:
-        return self.block_manager.get_cached_blocks_delta()
+        return self.block_manager[tp_rank].get_cached_blocks_delta()
     
     

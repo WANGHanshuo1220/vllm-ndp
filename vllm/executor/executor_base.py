@@ -10,6 +10,8 @@ from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sequence import ExecuteModelRequest
 from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
+from vllm.distributed import get_tensor_model_parallel_rank
+from vllm.utils import get_vllm_instance_id
 import torch
 
 class ExecutorBase(ABC):
@@ -51,7 +53,9 @@ class ExecutorBase(ABC):
         self.connector = None
         if self.mem_pool_config is not None:
             self.connector = RemoteConnector(
-                self.mem_pool_config)
+                self.mem_pool_config,
+                int(get_vllm_instance_id(), 32),
+                get_tensor_model_parallel_rank())
 
         self._init_executor()
 

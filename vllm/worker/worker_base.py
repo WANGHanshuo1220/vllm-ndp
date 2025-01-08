@@ -8,7 +8,8 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
 import torch
 
 from vllm.config import ObservabilityConfig
-from vllm.distributed import broadcast_tensor_dict, get_pp_group, get_tp_group
+from vllm.distributed import (broadcast_tensor_dict, get_pp_group, get_tp_group, 
+                              get_tensor_model_parallel_rank)
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.model_executor.layers.sampler import SamplerOutput
@@ -232,7 +233,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
     def _get_worker_input_from_broadcast(
         self
     ) -> Optional[Tuple[BroadcastableModelInput, WorkerInput, Dict[
-            str, torch.Tensor]]]:
+            str, torch.Tensor], List[int]]]:
         """ Get the worker input from the broadcasted tensor dict. """
         assert self.do_metadata_broadcast
         assert not self.is_driver_worker
@@ -247,11 +248,13 @@ class LocalOrDistributedWorkerBase(WorkerBase):
 
         kwargs = extract_previous_hidden_states(broadcast_data)
 
-        return model_input, worker_input, kwargs
+        to_free_seqs_list = broadcast_data.pop("to_free_seqs_list")
+
+        return model_input, worker_input, kwargs, to_free_seqs_list
 
     def _get_driver_input_and_broadcast(
         self, execute_model_req: ExecuteModelRequest
-    ) -> Tuple[BroadcastableModelInput, WorkerInput, Dict[str, torch.Tensor]]:
+    ) -> Tuple[BroadcastableModelInput, WorkerInput, Dict[str, torch.Tensor], List[int]]:
         """ Get the driver input and broadcast it to other workers.  """
         assert self.is_driver_worker
 
@@ -265,10 +268,14 @@ class LocalOrDistributedWorkerBase(WorkerBase):
 
         kwargs = extract_previous_hidden_states(execute_model_req)
 
+        to_free_seqs_list = execute_model_req.to_free_seqs_list
+        to_free_dict = {"to_free_seqs_list": to_free_seqs_list}
+
         if self.do_metadata_broadcast:
             broadcast_data = worker_input.as_broadcastable_tensor_dict()
             broadcast_data.update(model_input.as_broadcastable_tensor_dict())
             broadcast_data.update(kwargs)
+            broadcast_data.update(to_free_dict)
             broadcast_tensor_dict(broadcast_data, src=0)
 
         if execute_model_req.async_callback:
@@ -282,7 +289,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                 model_input,
                 seq_group_metadata_list=execute_model_req.seq_group_metadata_list)
 
-        return model_input, worker_input, kwargs
+        return model_input, worker_input, kwargs, to_free_seqs_list
 
     def prepare_input(
         self,
@@ -322,8 +329,8 @@ class LocalOrDistributedWorkerBase(WorkerBase):
         if inputs is None:
             return None
 
-        model_input, worker_input, kwargs = inputs
-        model_input.to_free_seq_list = execute_model_req.to_free_seqs_list
+        model_input, worker_input, kwargs, to_free_seqs_list = inputs
+        model_input.to_free_seq_list = to_free_seqs_list
         num_steps = worker_input.num_steps
 
         self.execute_worker(worker_input)

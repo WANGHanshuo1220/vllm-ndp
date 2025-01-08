@@ -9,7 +9,6 @@ from vllm.sequence import ExecuteModelRequest, PoolerOutput
 from vllm.utils import (get_distributed_init_method, get_ip, get_open_port,
                         make_async)
 from vllm.worker.worker_base import WorkerBase, WorkerWrapperBase
-from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
 import torch
 
 logger = init_logger(__name__)
@@ -36,10 +35,6 @@ class GPUExecutor(ExecutorBase):
         """
         assert self.parallel_config.world_size == 1, (
             "GPUExecutor only supports single GPU.")
-
-        self.connector = None
-        if self.mem_pool_config is not None:
-            self.connector = RemoteConnector(self.mem_pool_config)
 
         self.driver_worker = self._create_worker()
         self.driver_worker.init_device()

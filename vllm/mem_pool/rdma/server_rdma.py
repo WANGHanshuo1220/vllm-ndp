@@ -30,16 +30,21 @@ def client_loop(
     # Engine connection info
     engine_id = server.get_engine_id(connection_id)
     tp_rank = server.get_tp_rank(connection_id)
+    print(f"{connection_id=}, {engine_id=}, {tp_rank=}")
 
     # Create a CPU engine
     engine = cpu_engine(engine_config, shared_resources, tp_rank)
+    print(f"Create engine done!!!!!!!!!!!!!! {tp_rank=}")
 
     server.prepare_recv_data_wr(connection_id)
+    print(f"Prepare data buffer done {tp_rank=}")
     server.recv_data_from_client(connection_id)
+    print(f"Recv data from client {tp_rank=}")
 
     global MEM_POOL_ID
     server.send_server_metadata_to_client(connection_id, MEM_POOL_ID)
     server.wait_completion_event(1, connection_id)
+    print(f"Send server metadata done {tp_rank=}")
 
     server.prepare_send_data_wr(connection_id)
     first = True

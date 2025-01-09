@@ -28,6 +28,7 @@ class cpu_engine():
         self.cache_config: CacheConfig = engine_config.cache_config
 
         self.tp_rank = tp_rank
+        self.tp_size = self.parallel_config.tensor_parallel_size
 
         self.cpu_kv_dimension = \
             (self.cache_config.block_size *
@@ -41,24 +42,29 @@ class cpu_engine():
 
 
     def _create_attention(self) -> Attention:
-        num_heads = self.model_config.get_num_attention_heads(
-            self.parallel_config)
-        model_config = self.model_config.hf_config
-        num_kv_heads = getattr(model_config, "num_key_value_heads", 
-                               model_config.num_attention_heads), 
-        num_kv_heads = num_kv_heads[0]
-        head_size = self.model_config.get_head_size()
-        hidden_size = self.model_config.get_hidden_size()
-        total_num_head = self.model_config.get_num_attention_heads(
+        self.num_heads = self.model_config.get_num_attention_heads(
             self.parallel_config
         )
-        head_dim = hidden_size // total_num_head
-        scale = head_dim**-0.5
+
+        self.total_num_kv_heads = self.model_config.get_total_num_kv_heads()
+        if self.total_num_kv_heads >= self.tp_size:
+            # Number of KV heads is greater than TP size, so we partition
+            # the KV heads across multiple tensor parallel GPUs.
+            assert self.total_num_kv_heads % self.tp_size == 0
+        else:
+            # Number of KV heads is less than TP size, so we replicate
+            # the KV heads across multiple tensor parallel GPUs.
+            assert self.tp_size % self.total_num_kv_heads == 0
+        self.num_kv_heads = max(1, self.total_num_kv_heads // self.tp_size)
+
+        self.head_dim = self.model_config.get_head_size()
+        
+        scale = self.head_dim**-0.5
         return Attention(
-            num_heads,
-            head_size,
+            self.num_heads,
+            self.head_dim,
             scale=scale,
-            num_kv_heads=num_kv_heads,
+            num_kv_heads=self.num_kv_heads,
             cache_config=self.cache_config,
             mem_pool_config=self.mem_pool_config
         )

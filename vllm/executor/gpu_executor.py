@@ -38,6 +38,7 @@ class GPUExecutor(ExecutorBase):
 
         self.driver_worker = self._create_worker()
         self.driver_worker.init_device()
+        self.driver_worker.init_mempool_connector()
         self.driver_worker.load_model()
 
     def _get_worker_kwargs(
@@ -66,7 +67,6 @@ class GPUExecutor(ExecutorBase):
             or (rank % self.parallel_config.tensor_parallel_size == 0),
             observability_config=self.observability_config,
             mem_pool_config=self.mem_pool_config,
-            connector=self.connector,
         )
 
     def _get_worker_module_and_class(

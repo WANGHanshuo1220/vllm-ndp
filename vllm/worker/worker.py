@@ -29,6 +29,8 @@ from vllm.worker.enc_dec_model_runner import EncoderDecoderModelRunner
 from vllm.worker.model_runner import GPUModelRunnerBase, ModelRunner
 from vllm.worker.worker_base import LocalOrDistributedWorkerBase, WorkerInput
 from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
+from vllm.distributed import get_tensor_model_parallel_rank
+from vllm.utils import get_vllm_instance_id
 
 logger = init_logger(__name__)
 
@@ -59,7 +61,6 @@ class Worker(LocalOrDistributedWorkerBase):
         model_runner_cls: Optional[Type[GPUModelRunnerBase]] = None,
         observability_config: Optional[ObservabilityConfig] = None,
         mem_pool_config: Optional[MemPoolConfig] = None,
-        connector: Optional[RemoteConnector] = None,
     ) -> None:
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -83,7 +84,7 @@ class Worker(LocalOrDistributedWorkerBase):
             init_cached_hf_modules()
         self.observability_config = observability_config
         self.mem_pool_config = mem_pool_config
-        self.connector = connector
+        self.connector = None
 
         # Return hidden states from target model if the draft model is an
         # mlp_speculator
@@ -115,7 +116,6 @@ class Worker(LocalOrDistributedWorkerBase):
             observability_config=observability_config,
             **speculative_args,
             mem_pool_config=mem_pool_config,
-            connector=connector,
         )
         # Uninitialized cache engine. Will be initialized by
         # initialize_cache.
@@ -185,6 +185,14 @@ class Worker(LocalOrDistributedWorkerBase):
                                             self.local_rank)
         # Set random seed.
         set_random_seed(self.model_config.seed)
+
+    def init_mempool_connector(self) -> None:
+        if self.mem_pool_config is not None:
+            self.connector = RemoteConnector(
+                self.mem_pool_config,
+                hash(get_vllm_instance_id()) & 0xFFFFFFFF,
+                get_tensor_model_parallel_rank())
+            self.model_runner.init_mempool_connector(self.connector)
 
     def load_model(self):
         self.model_runner.load_model()

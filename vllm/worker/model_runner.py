@@ -54,6 +54,7 @@ from vllm.worker.model_runner_base import (
     _add_sampling_metadata_broadcastable_dict,
     _init_attn_metadata_from_tensor_dict,
     _init_sampling_metadata_from_tensor_dict, dump_input_when_exception)
+from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
 
 import asyncio
 # from vllm.mem_pool.tcp.connector import RemoteConnector
@@ -153,7 +154,7 @@ class ModelInputForGPUWithSamplingMetadata(ModelInputForGPU):
     is_prompt: Optional[bool] = None
 
     # For telling the remote pool to free seq's blocks
-    to_free_seq_list: Optional[int] = None
+    to_free_seqs_list: Optional[int] = None
 
     def as_broadcastable_tensor_dict(self) -> Dict[str, Any]:
         tensor_dict = {
@@ -927,7 +928,6 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         input_registry: InputRegistry = INPUT_REGISTRY,
         mm_registry: MultiModalRegistry = MULTIMODAL_REGISTRY,
         mem_pool_config: Optional[MemPoolConfig] = None,
-        connector: Optional[RemoteConnector] = None,
     ):
         self.model_config = model_config
         self.parallel_config = parallel_config
@@ -941,7 +941,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.return_hidden_states = return_hidden_states
         self.observability_config = observability_config
         self.mem_pool_config = mem_pool_config
-        self.connector = connector
+        self.connector = None
 
         self.device = self.device_config.device
         self.pin_memory = is_pin_memory_available()
@@ -1021,6 +1021,9 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         self.add_delta: List[int] = []
         self.pop_delta: List[int] = []
         self.delta_lock = threading.Lock()
+    
+    def init_mempool_connector(self, connector: RemoteConnector) -> None:
+        self.connector = connector
 
     def load_model(self) -> None:
         logger.info("Starting to load model %s...", self.model_config.model)
@@ -1721,7 +1724,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                                            model_input.sampling_metadata)
 
         if not self.is_driver_worker:
-            return []
+            return [], [], []
 
         if model_input.async_callback is not None:
             model_input.async_callback()

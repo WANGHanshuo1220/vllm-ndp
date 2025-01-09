@@ -7,10 +7,13 @@ import threading
 
 from resources import Shared_mem_resources
 from engine import cpu_engine
+from uuid import uuid4
 
 import rdma_server
 
 logger = init_logger(__name__)
+
+MEM_POOL_ID = None
 
 def client_loop(
     server: rdma_server.RDMA_Server, 
@@ -34,7 +37,8 @@ def client_loop(
     server.prepare_recv_data_wr(connection_id)
     server.recv_data_from_client(connection_id)
 
-    server.send_server_metadata_to_client(connection_id)
+    global MEM_POOL_ID
+    server.send_server_metadata_to_client(connection_id, MEM_POOL_ID)
     server.wait_completion_event(1, connection_id)
 
     server.prepare_send_data_wr(connection_id)
@@ -72,6 +76,11 @@ def client_loop(
 
     server.disconnect_and_cleanup(connection_id)
 
+def set_mempool_id() -> None:
+    global MEM_POOL_ID
+    MEM_POOL_ID = str(uuid4().hex)
+    MEM_POOL_ID = hash(MEM_POOL_ID) & 0xFFFFFFFF
+
 if __name__=="__main__":
     # Parse args to create configs
     parser = FlexibleArgumentParser(
@@ -87,6 +96,9 @@ if __name__=="__main__":
     num_engine = 1
     tp_size = engine_config.parallel_config.tensor_parallel_size
     num_connections = num_engine * tp_size
+
+    # Set mempool id
+    set_mempool_id()
 
     # Create shared resources (cache_engine and block_manager)
     shared_resources = Shared_mem_resources(engine_config,

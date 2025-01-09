@@ -19,7 +19,7 @@ llm = LLM(model="facebook/opt-125m",
           use_v2_block_manager=True,
           enable_prefix_caching=True,
           enable_chunked_prefill=False,
-          tensor_parallel_size=1,
+          tensor_parallel_size=2,
           worker_use_ray=True,
           mp_enable=True, mp_host="172.16.253.16", mp_port="3389")
 

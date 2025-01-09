@@ -3,6 +3,7 @@ from vllm.config import MemPoolConfig
 import torch
 import rdma_client
 import rdma_data_struct
+import time
 
 BLOCK_SIZE = rdma_data_struct.BLOCK_SIZE
 MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
@@ -17,11 +18,13 @@ class RemoteConnector():
         config: Optional[MemPoolConfig] = None,
         engine_id: Optional[int] = None,
         tp_rank: Optional[int] = None,
+        tp_size: Optional[int] = None,
     ):
         self.engine_id = engine_id
         self.tp_rank = tp_rank
+        self.tp_size = tp_size
 
-        self.client = rdma_client.RDMA_Client()
+        self.client = rdma_client.RDMA_Client(self.tp_size)
         self.client.client_prepare_connection(
             int(config.port), config.host)
         self.client.client_pre_post_recv()
@@ -60,6 +63,7 @@ class RemoteConnector():
                     assert(t.shape == (2, BLOCK_SIZE, NUM_HEADS, HIDDEN_SIZE//NUM_HEADS))
 
         self.prefill_handler.set_all(
+            self.tp_size,
             self.engine_id,
             self.tp_rank,
             seq_ids,
@@ -94,6 +98,7 @@ class RemoteConnector():
         tensor = [query, key, value]
 
         self.decode_handler.set_all(
+            self.tp_size,
             self.tp_rank,
             max_decode_seq_len,
             num_decode_tokens,

@@ -1526,7 +1526,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
     def _store_prefilled_kv(
         self, 
-        engine_id: int,
         seq_ids: list[int],
         seq_lengths: list[int],
         token_ids: List[int],
@@ -1538,7 +1537,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             self.kv_transfer_time[seq_id] = time.time()
             logger.info(f"send {seq_id} at {time.time():.4f}")
         (add_delta, pop_delta) = self.connector.store_kv(
-            engine_id, seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list)
+            seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list)
         with self.delta_lock:
             self.add_delta.extend(add_delta)
             self.pop_delta.extend(pop_delta)
@@ -1579,7 +1578,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             to_transfer_tensor_list.append(seq_tensor_list)
 
         # TODO: get engine_id
-        engine_id = 1
         seq_ids = list(block_tables.keys())
         seq_lengths = [len(sublist) for sublist in seq_id_to_tokens.values()]
         token_ids = [item for sublist in seq_id_to_tokens.values() for item in sublist]
@@ -1587,9 +1585,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         tensor_list = to_transfer_tensor_list
 
         task = make_async(self._store_prefilled_kv, self.store_kv_event_loop)(
-            engine_id, seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list
+            seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list
         )
-        print(engine_id, seq_ids, seq_lengths, token_ids, free_seq_ids)
         for seq_id in seq_ids:
             self.transfer_task_handlers[seq_id] = task
 

@@ -13,7 +13,8 @@ from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          SpeculativeConfig, MemPoolConfig)
 from vllm.distributed import (ensure_model_parallel_initialized,
                               init_distributed_environment,
-                              set_custom_all_reduce)
+                              set_custom_all_reduce,
+                              get_tensor_model_parallel_world_size)
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.model_executor import set_random_seed
@@ -187,11 +188,20 @@ class Worker(LocalOrDistributedWorkerBase):
         set_random_seed(self.model_config.seed)
 
     def init_mempool_connector(self) -> None:
+        rank = get_tensor_model_parallel_rank()
+        engine_id = hash(get_vllm_instance_id()) & 0xFFFFFFFF
+        tp_rank = get_tensor_model_parallel_rank()
+        world_size = get_tensor_model_parallel_world_size()
+        print(f"{engine_id=}, {get_vllm_instance_id()}, {tp_rank=}, {world_size=}")
+
         if self.mem_pool_config is not None:
+            print(f"{rank=} create connector")
             self.connector = RemoteConnector(
                 self.mem_pool_config,
-                hash(get_vllm_instance_id()) & 0xFFFFFFFF,
-                get_tensor_model_parallel_rank())
+                engine_id,
+                tp_rank,
+                world_size)
+            print(f"{rank=} create connector done")
             self.model_runner.init_mempool_connector(self.connector)
 
     def load_model(self):

@@ -8,12 +8,19 @@ import threading
 from resources import Shared_mem_resources
 from engine import cpu_engine
 from uuid import uuid4
+import os
+import time
 
 import rdma_server
 
 logger = init_logger(__name__)
 
 MEM_POOL_ID = None
+
+def log_to_file(file_name, log_message):
+    log_message += f" ({time.time()})"
+    with open(file_name, "a") as log_file:
+        log_file.write(log_message + "\n")
 
 def client_loop(
     server: rdma_server.RDMA_Server, 
@@ -30,21 +37,27 @@ def client_loop(
     # Engine connection info
     engine_id = server.get_engine_id(connection_id)
     tp_rank = server.get_tp_rank(connection_id)
-    print(f"{connection_id=}, {engine_id=}, {tp_rank=}")
+
+    file_name = f"output_{tp_rank}.log"
+    with open(file_name, "w") as log_file:
+        log_file.write("")
+
+    log_to_file(file_name, f"{connection_id=}, {engine_id=}, {tp_rank=}")
 
     # Create a CPU engine
     engine = cpu_engine(engine_config, shared_resources, tp_rank)
-    print(f"Create engine done!!!!!!!!!!!!!! {tp_rank=}")
+    log_to_file(file_name, f"Create engine done!!!!!!!!!!!!!! {tp_rank=}")
 
+    log_to_file(file_name, f"Preparing data buffer {tp_rank=}")
     server.prepare_recv_data_wr(connection_id)
-    print(f"Prepare data buffer done {tp_rank=}")
+    log_to_file(file_name, f"Prepare data buffer done {tp_rank=}")
     server.recv_data_from_client(connection_id)
-    print(f"Recv data from client {tp_rank=}")
+    log_to_file(file_name, f"Recv data from client {tp_rank=}")
 
     global MEM_POOL_ID
     server.send_server_metadata_to_client(connection_id, MEM_POOL_ID)
     server.wait_completion_event(1, connection_id)
-    print(f"Send server metadata done {tp_rank=}")
+    log_to_file(file_name, f"Send server metadata done {tp_rank=}")
 
     server.prepare_send_data_wr(connection_id)
     first = True

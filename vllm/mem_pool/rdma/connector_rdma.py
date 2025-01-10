@@ -12,6 +12,11 @@ HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
 NUM_HEADS = rdma_data_struct.NUM_HEADS
 NUM_LAYER = rdma_data_struct.NUM_LAYER
 
+def log_to_file(file_name, log_message):
+    log_message += f" ({time.time()})"
+    with open(file_name, "a") as log_file:
+        log_file.write(log_message + "\n")
+
 class RemoteConnector():
     def __init__(
         self, 
@@ -24,13 +29,21 @@ class RemoteConnector():
         self.tp_rank = tp_rank
         self.tp_size = tp_size
 
+        file_name = f"connector_output_{tp_rank}.log"
+        with open(file_name, "w") as log_file:
+            log_file.write("")
+
         self.client = rdma_client.RDMA_Client(self.tp_size)
+        log_to_file(file_name, f"{tp_rank=} create client success")
         self.client.client_prepare_connection(
             int(config.port), config.host)
+        log_to_file(file_name, f"{tp_rank=} prepare connection success")
         self.client.client_pre_post_recv()
         self.client.client_connect_to_server()
+        log_to_file(file_name, f"{tp_rank=} connect to server success")
         self.client.client_xchange_metadata_with_server(
             self.engine_id, self.tp_rank)
+        log_to_file(file_name, f"{tp_rank=} xchange metadata success")
 
         self.prefill_handler = self.client.get_send_kv_cache_handler()
         self.decode_handler = self.client.get_send_qkv_handler()
@@ -60,7 +73,7 @@ class RemoteConnector():
             for block_layers in tensors[i]:
                 assert(len(block_layers) == NUM_LAYER)
                 for t in block_layers:
-                    assert(t.shape == (2, BLOCK_SIZE, NUM_HEADS, HIDDEN_SIZE//NUM_HEADS))
+                    assert t.shape == (2, BLOCK_SIZE, NUM_HEADS//self.tp_size, HIDDEN_SIZE//NUM_HEADS)
 
         self.prefill_handler.set_all(
             self.tp_size,

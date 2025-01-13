@@ -52,7 +52,7 @@ def client_loop(
     server.prepare_recv_data_wr(connection_id)
     log_to_file(file_name, f"Prepare data buffer done {tp_rank=}")
     server.recv_data_from_client(connection_id)
-    log_to_file(file_name, f"Recv data from client {tp_rank=}")
+    log_to_file(file_name, f"Prepare recv data from client {tp_rank=}")
 
     global MEM_POOL_ID
     server.send_server_metadata_to_client(connection_id, MEM_POOL_ID)
@@ -61,9 +61,12 @@ def client_loop(
 
     server.prepare_send_data_wr(connection_id)
     first = True
+    log_to_file(file_name, f"Going to while loop")
     while (not server.check_client_disconnected(connection_id)):
+        log_to_file(file_name, f"In while loop")
 
         if first:
+            log_to_file(file_name, "wait for first request, should be prefill kv cache")
             server.wait_completion_event(1, connection_id)
             server.update_client_status(connection_id)
             if (server.check_client_disconnected(connection_id)):
@@ -72,17 +75,23 @@ def client_loop(
 
         # Processing data
         if (server.is_prefill_kv_cache(connection_id)):
+            log_to_file(file_name, "Recieve a prefill save kv cache")
             # This is a prefill save kv cache request
             recv_handler = server.get_recv_kv_cache_handler(connection_id)
             send_handler = server.get_send_cache_info_handler(connection_id)
+            log_to_file(file_name, "Get both handlers")
             engine.save_kv_cache(recv_handler, send_handler)
+            log_to_file(file_name, "Save kv cache done")
             # recv_handler.pretty_print()
             # send_handler.pretty_print()
         else:
+            log_to_file(file_name, "Recieve a decode attention")
             # This is a decode attention computation request
             recv_handler = server.get_recv_qkv_handler(connection_id)
             send_handler = server.get_send_output_handler(connection_id)
+            log_to_file(file_name, "Get both handlers")
             engine.compute_attention(recv_handler, send_handler)
+            log_to_file(file_name, "Compute attention done")
             # recv_handler.pretty_print()
             # send_handler.pretty_print()
 
@@ -123,7 +132,7 @@ if __name__=="__main__":
                                             num_connections)
 
     # Create rdma server
-    server = rdma_server.RDMA_Server(num_connections)
+    server = rdma_server.RDMA_Server(tp_size, num_engine)
     server.start_rdma_server(3389)
 
     threads = []

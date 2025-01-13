@@ -15,6 +15,11 @@ import rdma_data_struct
 
 logger = init_logger(__name__)
 
+def log_to_file(file_name, log_message):
+    log_message += f" ({time.time()})"
+    with open(file_name, "a") as log_file:
+        log_file.write(log_message + "\n")
+
 class cpu_engine():
     def __init__(
         self, 
@@ -29,12 +34,14 @@ class cpu_engine():
 
         self.tp_rank = tp_rank
         self.tp_size = self.parallel_config.tensor_parallel_size
+        self.file_name = f"output_{tp_rank}.log"
 
         self.cpu_kv_dimension = \
             (self.cache_config.block_size *
              self.model_config.get_num_attention_heads(
                  self.parallel_config) *
              self.model_config.get_head_size())
+        print(f"{self.cpu_kv_dimension=}")
 
         torch.set_default_dtype(torch.bfloat16)
         self.shared_resources = shared_resources
@@ -90,14 +97,17 @@ class cpu_engine():
         recv_handler: rdma_data_struct.ClientSendKVCache,
         send_handler: rdma_data_struct.ClientRecvCacheInfo,
     ):
+        log_to_file(self.file_name, f"Begin save kv cache")
         seq_ids = recv_handler.get_seq_ids()
         token_ids = recv_handler.get_token_ids()
         tensor_list = recv_handler.get_tensor()
         to_free_seq_ids = recv_handler.get_to_free_seq_ids()
         seq_lengths = recv_handler.get_seq_lengths()
+        log_to_file(self.file_name, f"{seq_ids=}, {token_ids=}, {seq_lengths=}")
 
         assert(len(seq_ids) == len(seq_lengths))
-        assert(len(seq_ids) == len(tensor_list))
+        assert(len(seq_ids) == len(tensor_list), 
+            f"{len(seq_ids)=} vs. {len(tensor_list)=}")
         assert(len(token_ids) == sum(seq_lengths))
 
         # First free blocks of finished seqs
@@ -120,7 +130,9 @@ class cpu_engine():
 
         assert(len(seqs_token_ids) == len(seq_ids))
 
+        log_to_file(self.file_name, f"in iter")
         for i, seq_id in enumerate(seq_ids):
+            log_to_file(self.file_name, f"  {i=}: {seq_id=}")
 
             seq_token_ids = seqs_token_ids[i]
             seq_kv_blocks = tensor_list[i]

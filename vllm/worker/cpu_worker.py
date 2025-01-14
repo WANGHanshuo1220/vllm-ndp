@@ -109,6 +109,14 @@ class CPUCacheEngine:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_dtype]
         dtype_size = torch.tensor([], dtype=dtype).element_size()
         return dtype_size * total
+    
+    def set_kv_tensor(
+        self, 
+        layer_id: int,
+        block_id: int,
+        layer_tensor: torch.tensor
+    ) -> None:
+        self.cpu_cache[layer_id][:,block_id,:] = layer_tensor
 
 
 class CPUWorker(LoraNotSupportedWorkerBase, LocalOrDistributedWorkerBase):

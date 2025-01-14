@@ -12,6 +12,7 @@ import os
 import time
 
 import rdma_server
+import rdma_data_struct
 
 logger = init_logger(__name__)
 
@@ -19,7 +20,7 @@ MEM_POOL_ID = None
 
 def log_to_file(file_name, log_message):
     log_message += f" ({time.time()})"
-    with open(file_name, "a") as log_file:
+    with open(file_name, "a", buffering=1) as log_file:
         log_file.write(log_message + "\n")
 
 def client_loop(
@@ -38,35 +39,25 @@ def client_loop(
     engine_id = server.get_engine_id(connection_id)
     tp_rank = server.get_tp_rank(connection_id)
 
-    file_name = f"output_{tp_rank}.log"
-    with open(file_name, "w") as log_file:
-        log_file.write("")
-
-    log_to_file(file_name, f"{connection_id=}, {engine_id=}, {tp_rank=}")
-
     # Create a CPU engine
     engine = cpu_engine(engine_config, shared_resources, tp_rank)
-    log_to_file(file_name, f"Create engine done!!!!!!!!!!!!!! {tp_rank=}")
-
-    log_to_file(file_name, f"Preparing data buffer {tp_rank=}")
     server.prepare_recv_data_wr(connection_id)
-    log_to_file(file_name, f"Prepare data buffer done {tp_rank=}")
     server.recv_data_from_client(connection_id)
-    log_to_file(file_name, f"Prepare recv data from client {tp_rank=}")
 
     global MEM_POOL_ID
     server.send_server_metadata_to_client(connection_id, MEM_POOL_ID)
     server.wait_completion_event(1, connection_id)
-    log_to_file(file_name, f"Send server metadata done {tp_rank=}")
 
     server.prepare_send_data_wr(connection_id)
+    recv_kv_cache_handler = server.get_recv_kv_cache_handler(connection_id)
+    send_cache_info_handler = server.get_send_cache_info_handler(connection_id)
+    recv_qkv_handler = server.get_recv_qkv_handler(connection_id)
+    send_output_handler = server.get_send_output_handler(connection_id)
+
     first = True
-    log_to_file(file_name, f"Going to while loop")
     while (not server.check_client_disconnected(connection_id)):
-        log_to_file(file_name, f"In while loop")
 
         if first:
-            log_to_file(file_name, "wait for first request, should be prefill kv cache")
             server.wait_completion_event(1, connection_id)
             server.update_client_status(connection_id)
             if (server.check_client_disconnected(connection_id)):
@@ -75,23 +66,11 @@ def client_loop(
 
         # Processing data
         if (server.is_prefill_kv_cache(connection_id)):
-            log_to_file(file_name, "Recieve a prefill save kv cache")
-            # This is a prefill save kv cache request
-            recv_handler = server.get_recv_kv_cache_handler(connection_id)
-            send_handler = server.get_send_cache_info_handler(connection_id)
-            log_to_file(file_name, "Get both handlers")
-            engine.save_kv_cache(recv_handler, send_handler)
-            log_to_file(file_name, "Save kv cache done")
+            engine.save_kv_cache(recv_kv_cache_handler, send_cache_info_handler)
             # recv_handler.pretty_print()
             # send_handler.pretty_print()
         else:
-            log_to_file(file_name, "Recieve a decode attention")
-            # This is a decode attention computation request
-            recv_handler = server.get_recv_qkv_handler(connection_id)
-            send_handler = server.get_send_output_handler(connection_id)
-            log_to_file(file_name, "Get both handlers")
-            engine.compute_attention(recv_handler, send_handler)
-            log_to_file(file_name, "Compute attention done")
+            engine.compute_attention(recv_qkv_handler, send_output_handler)
             # recv_handler.pretty_print()
             # send_handler.pretty_print()
 

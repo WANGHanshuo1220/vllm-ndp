@@ -115,6 +115,9 @@ class ModelInputForGPU(ModelRunnerInputBase):
     seq_group_metadata_list: Optional[List[SequenceGroupMetadata]] = None
     scheduler_outputs: Optional[SchedulerOutputs] = None
 
+    # For telling the remote pool to free seq's blocks
+    to_free_seqs_list: Optional[int] = None
+
     def as_broadcastable_tensor_dict(self) -> Dict[str, Any]:
         tensor_dict = {
             "input_tokens": self.input_tokens,
@@ -152,9 +155,6 @@ class ModelInputForGPUWithSamplingMetadata(ModelInputForGPU):
     # Used for speculative decoding. We do not broadcast it because it is only
     # used by the driver worker.
     is_prompt: Optional[bool] = None
-
-    # For telling the remote pool to free seq's blocks
-    to_free_seqs_list: Optional[int] = None
 
     def as_broadcastable_tensor_dict(self) -> Dict[str, Any]:
         tensor_dict = {
@@ -1667,7 +1667,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 for seq_id, seq_data in seq_group_meta.seq_data.items():
                     seqs_data[seq_id] = seq_data.get_token_ids()
 
-        t1 = time.time()
+        # t1 = time.time()
         hidden_or_intermediate_states, t = model_executable(
             input_ids=model_input.input_tokens,
             positions=model_input.input_positions,
@@ -1678,11 +1678,11 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             **MultiModalInputs.as_kwargs(multi_modal_kwargs,
                                          device=self.device),
             **seqlen_agnostic_kwargs)
-        t2 = time.time()
-        if model_input.attn_metadata.num_prefills > 0:
-            print(f"Prefill: Forward ttl time = {(t2-t1):.6f}s, attn ttl time = {t:.6}s")
-        else:
-            print(f"Decode: Forward ttl time = {(t2-t1):.6f}s, attn ttl time = {t:.6}s")
+        # t2 = time.time()
+        # if model_input.attn_metadata.num_prefills > 0:
+        #     print(f"Prefill: Forward ttl time = {(t2-t1):.6f}s, attn ttl time = {t:.6}s")
+        # else:
+        #     print(f"Decode: Forward ttl time = {(t2-t1):.6f}s, attn ttl time = {t:.6}s")
 
         # NOTE: Here if this request is prefill, the generated blocks should 
         # be stored remotely. [(engine_id, req_id): kv] should be transfered
@@ -1692,7 +1692,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         ):
             self._store_prefilled_kv_helper(kv_caches, 
                                             model_input.seq_group_metadata_list,
-                                            model_input.to_free_seq_list.copy())
+                                            model_input.to_free_seqs_list.copy())
         
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):

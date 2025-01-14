@@ -188,20 +188,17 @@ class Worker(LocalOrDistributedWorkerBase):
         set_random_seed(self.model_config.seed)
 
     def init_mempool_connector(self) -> None:
-        rank = get_tensor_model_parallel_rank()
         engine_id = hash(get_vllm_instance_id()) & 0xFFFFFFFF
         tp_rank = get_tensor_model_parallel_rank()
         world_size = get_tensor_model_parallel_world_size()
-        print(f"{engine_id=}, {get_vllm_instance_id()}, {tp_rank=}, {world_size=}")
 
         if self.mem_pool_config is not None:
-            print(f"{rank=} create connector")
             self.connector = RemoteConnector(
                 self.mem_pool_config,
                 engine_id,
                 tp_rank,
                 world_size)
-            print(f"{rank=} create connector done")
+
             self.model_runner.init_mempool_connector(self.connector)
 
     def load_model(self):

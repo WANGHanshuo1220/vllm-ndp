@@ -16,10 +16,11 @@ from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.platforms import current_platform
 from vllm.sequence import ExecuteModelRequest, IntermediateTensors
 from vllm.utils import (enable_trace_function_call_for_thread,
-                        update_environment_variables)
+                        update_environment_variables, log_to_file)
 from vllm.worker.model_runner_base import (BroadcastableModelInput,
                                            ModelRunnerBase,
                                            ModelRunnerInputBase)
+from vllm.sequence import SequenceGroupMetadata
 
 logger = init_logger(__name__)
 
@@ -249,12 +250,16 @@ class LocalOrDistributedWorkerBase(WorkerBase):
         kwargs = extract_previous_hidden_states(broadcast_data)
 
         to_free_seqs_list = broadcast_data.pop("to_free_seqs_list")
+        model_input.to_free_seqs_list = to_free_seqs_list
 
-        return model_input, worker_input, kwargs, to_free_seqs_list
+        sg_metadata_list = broadcast_data.pop("seq_group_metadata_list")
+        model_input.seq_group_metadata_list = sg_metadata_list
+
+        return model_input, worker_input, kwargs
 
     def _get_driver_input_and_broadcast(
         self, execute_model_req: ExecuteModelRequest
-    ) -> Tuple[BroadcastableModelInput, WorkerInput, Dict[str, torch.Tensor], List[int]]:
+    ) -> Tuple[BroadcastableModelInput, WorkerInput, Dict[str, torch.Tensor]]:
         """ Get the driver input and broadcast it to other workers.  """
         assert self.is_driver_worker
 
@@ -269,19 +274,10 @@ class LocalOrDistributedWorkerBase(WorkerBase):
         kwargs = extract_previous_hidden_states(execute_model_req)
 
         to_free_seqs_list = execute_model_req.to_free_seqs_list
+        model_input.to_free_seqs_list = to_free_seqs_list
         to_free_dict = {"to_free_seqs_list": to_free_seqs_list}
-
-        if self.do_metadata_broadcast:
-            broadcast_data = worker_input.as_broadcastable_tensor_dict()
-            broadcast_data.update(model_input.as_broadcastable_tensor_dict())
-            broadcast_data.update(kwargs)
-            broadcast_data.update(to_free_dict)
-            broadcast_tensor_dict(broadcast_data, src=0)
-
-        if execute_model_req.async_callback:
-            model_input = dataclasses.replace(  # type: ignore
-                model_input,
-                async_callback=execute_model_req.async_callback)
+        sg_metadata_dict = {"seq_group_metadata_list": 
+            execute_model_req.seq_group_metadata_list}
 
         if self.device_config.device_type != "cpu":
             assert (execute_model_req.seq_group_metadata_list is not None)
@@ -289,7 +285,20 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                 model_input,
                 seq_group_metadata_list=execute_model_req.seq_group_metadata_list)
 
-        return model_input, worker_input, kwargs, to_free_seqs_list
+        if self.do_metadata_broadcast:
+            broadcast_data = worker_input.as_broadcastable_tensor_dict()
+            broadcast_data.update(model_input.as_broadcastable_tensor_dict())
+            broadcast_data.update(kwargs)
+            broadcast_data.update(to_free_dict)
+            broadcast_data.update(sg_metadata_dict)
+            broadcast_tensor_dict(broadcast_data, src=0)
+
+        if execute_model_req.async_callback:
+            model_input = dataclasses.replace(  # type: ignore
+                model_input,
+                async_callback=execute_model_req.async_callback)
+
+        return model_input, worker_input, kwargs
 
     def prepare_input(
         self,
@@ -309,9 +318,11 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                     # notify all other workers to stop their execution loop.
                     broadcast_tensor_dict({}, src=0)
                 return None
-            return self._get_driver_input_and_broadcast(execute_model_req)
+            ret = self._get_driver_input_and_broadcast(execute_model_req)
+            return ret
         else:
-            return self._get_worker_input_from_broadcast()
+            ret = self._get_worker_input_from_broadcast()
+            return ret
 
     def execute_model(
         self,
@@ -329,8 +340,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
         if inputs is None:
             return None
 
-        model_input, worker_input, kwargs, to_free_seqs_list = inputs
-        model_input.to_free_seq_list = to_free_seqs_list
+        model_input, worker_input, kwargs = inputs
         num_steps = worker_input.num_steps
 
         self.execute_worker(worker_input)

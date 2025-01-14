@@ -20,11 +20,12 @@ llm = LLM(model="facebook/opt-125m",
           enable_prefix_caching=True,
           enable_chunked_prefill=False,
           tensor_parallel_size=2,
-          worker_use_ray=True,
-          mp_enable=True, mp_host="172.16.253.16", mp_port="3389")
+          worker_use_ray=False,
+          mp_enable=True, mp_host="172.16.253.20", mp_port="3389")
 
 prompts = [
-    "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",
+    # "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",
+    "The capital of France is",
 ]
 outputs = llm.generate(prompts, sampling_params)
 # Print the outputs.

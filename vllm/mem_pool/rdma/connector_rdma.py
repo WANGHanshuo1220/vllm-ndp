@@ -4,6 +4,9 @@ import torch
 import rdma_client
 import rdma_data_struct
 import time
+from vllm.distributed import get_tensor_model_parallel_rank
+from vllm.distributed import get_tensor_model_parallel_world_size
+from vllm.utils import log_to_file
 
 BLOCK_SIZE = rdma_data_struct.BLOCK_SIZE
 MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
@@ -11,11 +14,6 @@ MAX_SEQ_LENGTH = rdma_data_struct.MAX_SEQ_LENGTH
 HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
 NUM_HEADS = rdma_data_struct.NUM_HEADS
 NUM_LAYER = rdma_data_struct.NUM_LAYER
-
-def log_to_file(file_name, log_message):
-    log_message += f" ({time.time()})"
-    with open(file_name, "a") as log_file:
-        log_file.write(log_message + "\n")
 
 class RemoteConnector():
     def __init__(
@@ -29,21 +27,13 @@ class RemoteConnector():
         self.tp_rank = tp_rank
         self.tp_size = tp_size
 
-        file_name = f"connector_output_{tp_rank}.log"
-        with open(file_name, "w") as log_file:
-            log_file.write("")
-
         self.client = rdma_client.RDMA_Client(self.tp_size)
-        log_to_file(file_name, f"{tp_rank=} create client success")
         self.client.client_prepare_connection(
             int(config.port), config.host)
-        log_to_file(file_name, f"{tp_rank=} prepare connection success")
         self.client.client_pre_post_recv()
         self.client.client_connect_to_server()
-        log_to_file(file_name, f"{tp_rank=} connect to server success")
         self.client.client_xchange_metadata_with_server(
             self.engine_id, self.tp_rank)
-        log_to_file(file_name, f"{tp_rank=} xchange metadata success")
 
         self.prefill_handler = self.client.get_send_kv_cache_handler()
         self.decode_handler = self.client.get_send_qkv_handler()
@@ -52,6 +42,48 @@ class RemoteConnector():
     
     def __del__(self):
         self.client.client_disconnect_and_clean()
+
+    def _test_send(self, iter: int):
+        BLOCK_SIZE = rdma_data_struct.BLOCK_SIZE
+        MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
+        MAX_SEQ_LENGTH = rdma_data_struct.MAX_SEQ_LENGTH
+        HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
+        NUM_HEADS = rdma_data_struct.NUM_HEADS
+        NUM_LAYER = rdma_data_struct.NUM_LAYER
+        tp_size = self.tp_size
+        rank = self.tp_rank
+
+        seq_ids = [100 + 100*iter + rank]
+        seq_lengths = [4]
+        token_ids = [1 + iter, 2 + iter, 3 + iter, 4 + iter]
+        free_seq_ids = []
+
+        seq_num_blocks = []
+        for seq_length in seq_lengths:
+            seq_num_blocks.append((seq_length + BLOCK_SIZE - 1) // BLOCK_SIZE)
+
+        input_tensor = []
+        for i in range(len(seq_ids)):
+            num_blocks = seq_num_blocks[i]
+            seq_blocks = []
+            for block_idx in range(num_blocks):
+                block_layers = []
+                for j in range(NUM_LAYER):
+                    layer_tensor = torch.rand(
+                        [2, BLOCK_SIZE, NUM_HEADS//tp_size, HIDDEN_SIZE//NUM_HEADS],
+                        dtype=torch.float16
+                    )
+                    block_layers.append(layer_tensor)
+                seq_blocks.append(block_layers)
+            input_tensor.append(seq_blocks)
+
+        self.store_kv(
+            seq_ids,
+            seq_lengths,
+            token_ids,
+            free_seq_ids,
+            input_tensor
+        )
     
     def store_kv(
         self,
@@ -76,7 +108,6 @@ class RemoteConnector():
                     assert t.shape == (2, BLOCK_SIZE, NUM_HEADS//self.tp_size, HIDDEN_SIZE//NUM_HEADS)
 
         self.prefill_handler.set_all(
-            self.tp_size,
             self.engine_id,
             self.tp_rank,
             seq_ids,
@@ -111,7 +142,6 @@ class RemoteConnector():
         tensor = [query, key, value]
 
         self.decode_handler.set_all(
-            self.tp_size,
             self.tp_rank,
             max_decode_seq_len,
             num_decode_tokens,

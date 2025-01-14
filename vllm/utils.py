@@ -32,6 +32,7 @@ from typing_extensions import ParamSpec, TypeIs, assert_never
 import vllm.envs as envs
 from vllm.logger import enable_trace_function_call, init_logger
 
+import time
 logger = init_logger(__name__)
 
 # Exception strings for non-implemented encoder/decoder scenarios
@@ -1258,3 +1259,8 @@ class AtomicCounter:
     @property
     def value(self):
         return self._value
+
+def log_to_file(file_name, log_message):
+    log_message += f" ({time.time()})"
+    with open(file_name, "a", buffering=1) as log_file:
+        log_file.write(log_message + "\n")

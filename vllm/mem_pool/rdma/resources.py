@@ -12,7 +12,12 @@ from vllm.config import (CacheConfig, DeviceConfig, ModelConfig,
                          ParallelConfig, MemPoolConfig, EngineConfig)
 
 import torch
-import rdma_data_struct
+
+try:
+    import rdma_data_struct
+except:
+    print("No rdma_data_struct found. MemoryPool should be disabled")
+    rdma_data_struct = None
 
 logger = init_logger(__name__)
 

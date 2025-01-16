@@ -11,7 +11,12 @@ import torch
 from typing import List
 
 from resources import Shared_mem_resources
-import rdma_data_struct
+
+try:
+    import rdma_data_struct
+except:
+    print("No rdma_data_struct found. MemoryPool should be disabled")
+    rdma_data_struct = None
 
 logger = init_logger(__name__)
 
@@ -34,12 +39,13 @@ class cpu_engine():
 
         self.tp_rank = tp_rank
         self.tp_size = self.parallel_config.tensor_parallel_size
+        self.pp_size = self.parallel_config.pipeline_parallel_size
+        self.pp_num_layers = self.model_config.get_num_layers() // self.pp_size
 
-        self.cpu_kv_dimension = \
-            (self.cache_config.block_size *
-             self.model_config.get_num_attention_heads(
-                 self.parallel_config) *
-             self.model_config.get_head_size())
+        self.cpu_kv_dimension = (self.cache_config.block_size *
+                                 self.model_config.get_num_attention_heads(
+                                     self.parallel_config) *
+                                 self.model_config.get_head_size())
 
         torch.set_default_dtype(torch.bfloat16)
         self.shared_resources = shared_resources
@@ -77,17 +83,21 @@ class cpu_engine():
 
     def _store_kv_tensor(
         self,
+        pp_rank: int,
         seq_id: int,
         allocated_blocks: List[int],
         blocks_reusable: List[bool],
         blocks_tensor: List[List[torch.tensor]], # blocks -> layers
     ) -> None:
+        layer_base = pp_rank * self.pp_num_layers
         for i, layer_tensors in enumerate(blocks_tensor):
             block_id = allocated_blocks[i]
             if not blocks_reusable[i]:
-                for j in range(len(layer_tensors)):
-                    tensor = layer_tensors[j].view(2, self.cpu_kv_dimension)
-                    self.shared_resources.set_kv_tensor(j, block_id, tensor, self.tp_rank)
+                for r_layer_idx in range(len(layer_tensors)):
+                    abs_layer_idx = r_layer_idx + layer_base
+                    tensor = layer_tensors[abs_layer_idx].view(2, self.cpu_kv_dimension)
+                    self.shared_resources.set_kv_tensor(abs_layer_idx, block_id, 
+                                                        tensor, self.tp_rank)
 
 
     def save_kv_cache(
@@ -100,11 +110,11 @@ class cpu_engine():
         tensor_list = recv_handler.get_tensor()
         to_free_seq_ids = recv_handler.get_to_free_seq_ids()
         seq_lengths = recv_handler.get_seq_lengths()
+        pp_rank = recv_handler.get_pp_rank()
 
         assert(len(seq_ids) == len(seq_lengths))
-        assert(len(seq_ids) == len(tensor_list), 
-            f"{len(seq_ids)=} vs. {len(tensor_list)=}")
         assert(len(token_ids) == sum(seq_lengths))
+        assert(pp_rank < self.pp_size)
 
         # First free blocks of finished seqs
         for to_free_seq_id in to_free_seq_ids:
@@ -162,7 +172,7 @@ class cpu_engine():
             assert len(allocated_blocks) == len(seq_kv_blocks)
 
             self._store_kv_tensor(
-                seq_id, allocated_blocks, blocks_reusable, seq_kv_blocks
+                pp_rank, seq_id, allocated_blocks, blocks_reusable, seq_kv_blocks
             )
 
         add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta(self.tp_rank)

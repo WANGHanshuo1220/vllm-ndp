@@ -1,19 +1,31 @@
 from typing import Dict, List, TypeAlias, Optional, Tuple, Any
 from vllm.config import MemPoolConfig
 import torch
-import rdma_client
-import rdma_data_struct
-import time
-from vllm.distributed import get_tensor_model_parallel_rank
-from vllm.distributed import get_tensor_model_parallel_world_size
-from vllm.utils import log_to_file
 
-BLOCK_SIZE = rdma_data_struct.BLOCK_SIZE
-MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
-MAX_SEQ_LENGTH = rdma_data_struct.MAX_SEQ_LENGTH
-HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
-NUM_HEADS = rdma_data_struct.NUM_HEADS
-NUM_LAYER = rdma_data_struct.NUM_LAYER
+try:
+    import rdma_client
+except:
+    print("No rdma_client found. MemoryPool should be disabled")
+    rdma_client = None
+
+try:
+    import rdma_data_struct
+    BLOCK_SIZE = rdma_data_struct.BLOCK_SIZE
+    MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
+    MAX_SEQ_LENGTH = rdma_data_struct.MAX_SEQ_LENGTH
+    HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
+    NUM_HEADS = rdma_data_struct.NUM_HEADS
+    NUM_LAYER = rdma_data_struct.NUM_LAYER
+except:
+    print("No rdma_data_struct found. MemoryPool should be disabled")
+    rdma_data_struct = None
+    BLOCK_SIZE = None
+    MAX_BATCH_SIZE = None
+    MAX_SEQ_LENGTH = None
+    HIDDEN_SIZE = None
+    NUM_HEADS = None
+    NUM_LAYER = None
+
 
 class RemoteConnector():
     def __init__(
@@ -22,12 +34,16 @@ class RemoteConnector():
         engine_id: Optional[int] = None,
         tp_rank: Optional[int] = None,
         tp_size: Optional[int] = None,
+        pp_rank: Optional[int] = None,
+        pp_size: Optional[int] = None,
     ):
         self.engine_id = engine_id
         self.tp_rank = tp_rank
         self.tp_size = tp_size
+        self.pp_rank = pp_rank
+        self.pp_size = pp_size
 
-        self.client = rdma_client.RDMA_Client(self.tp_size)
+        self.client = rdma_client.RDMA_Client(tp_size, pp_size)
         self.client.client_prepare_connection(
             int(config.port), config.host)
         self.client.client_pre_post_recv()
@@ -103,13 +119,14 @@ class RemoteConnector():
             num_blocks = (seq_length + BLOCK_SIZE - 1) // BLOCK_SIZE
             assert(len(tensors[i]) == num_blocks)
             for block_layers in tensors[i]:
-                assert(len(block_layers) == NUM_LAYER)
+                assert(len(block_layers) == NUM_LAYER//self.pp_size)
                 for t in block_layers:
                     assert t.shape == (2, BLOCK_SIZE, NUM_HEADS//self.tp_size, HIDDEN_SIZE//NUM_HEADS)
 
         self.prefill_handler.set_all(
             self.engine_id,
             self.tp_rank,
+            self.pp_rank,
             seq_ids,
             seq_lengths,
             token_ids,

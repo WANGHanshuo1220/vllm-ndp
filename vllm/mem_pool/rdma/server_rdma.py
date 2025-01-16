@@ -11,8 +11,17 @@ from uuid import uuid4
 import os
 import time
 
-import rdma_server
-import rdma_data_struct
+try:
+    import rdma_server
+except:
+    print("No rdma_server found. MemoryPool should be disabled")
+    rdma_server = None
+
+try:
+    import rdma_data_struct
+except:
+    print("No rdma_data_struct found. MemoryPool should be disabled")
+    rdma_data_struct = None
 
 logger = init_logger(__name__)
 
@@ -101,7 +110,8 @@ if __name__=="__main__":
     # Get connections in this cluster
     num_engine = 1
     tp_size = engine_config.parallel_config.tensor_parallel_size
-    num_connections = num_engine * tp_size
+    pp_size = engine_config.parallel_config.pipeline_parallel_size
+    num_connections = tp_size * pp_size * num_engine
 
     # Set mempool id
     set_mempool_id()
@@ -111,7 +121,7 @@ if __name__=="__main__":
                                             num_connections)
 
     # Create rdma server
-    server = rdma_server.RDMA_Server(tp_size, num_engine)
+    server = rdma_server.RDMA_Server(tp_size, pp_size, num_engine)
     server.start_rdma_server(3389)
 
     threads = []

@@ -363,7 +363,7 @@ class LlamaModel(nn.Module):
             return IntermediateTensors({
                 "hidden_states": hidden_states,
                 "residual": residual
-            })
+            }), ttl
 
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states, ttl

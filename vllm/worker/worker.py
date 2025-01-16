@@ -14,7 +14,10 @@ from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
 from vllm.distributed import (ensure_model_parallel_initialized,
                               init_distributed_environment,
                               set_custom_all_reduce,
-                              get_tensor_model_parallel_world_size)
+                              get_tensor_model_parallel_rank,
+                              get_tensor_model_parallel_world_size,
+                              get_pipeline_parallel_rank,
+                              get_pipeline_parallel_world_size)
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.model_executor import set_random_seed
@@ -30,7 +33,6 @@ from vllm.worker.enc_dec_model_runner import EncoderDecoderModelRunner
 from vllm.worker.model_runner import GPUModelRunnerBase, ModelRunner
 from vllm.worker.worker_base import LocalOrDistributedWorkerBase, WorkerInput
 from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
-from vllm.distributed import get_tensor_model_parallel_rank
 from vllm.utils import get_vllm_instance_id
 
 logger = init_logger(__name__)
@@ -189,15 +191,21 @@ class Worker(LocalOrDistributedWorkerBase):
 
     def init_mempool_connector(self) -> None:
         engine_id = hash(get_vllm_instance_id()) & 0xFFFFFFFF
+
         tp_rank = get_tensor_model_parallel_rank()
-        world_size = get_tensor_model_parallel_world_size()
+        tp_size = get_tensor_model_parallel_world_size()
+
+        pp_rank = get_pipeline_parallel_rank()
+        pp_size = get_pipeline_parallel_world_size()
 
         if self.mem_pool_config is not None:
             self.connector = RemoteConnector(
                 self.mem_pool_config,
-                engine_id,
-                tp_rank,
-                world_size)
+                engine_id=engine_id,
+                tp_rank=tp_rank,
+                tp_size=tp_size,
+                pp_rank=pp_rank,
+                pp_size=pp_size)
 
             self.model_runner.init_mempool_connector(self.connector)
 

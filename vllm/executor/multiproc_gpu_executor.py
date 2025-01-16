@@ -229,6 +229,7 @@ class MultiprocessingGPUExecutorAsync(MultiprocessingGPUExecutor,
         execute_model_req: Optional[ExecuteModelRequest] = None
     ) -> List[SamplerOutput]:
         if not self.tp_driver_workers:
+            # This means both pp and tp = 1
             return await self.driver_exec_model(execute_model_req)
 
         if self.pp_locks is None:

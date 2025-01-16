@@ -187,6 +187,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
     If custom control plane logic is needed to transfer metadata, or if the
     model runner cannot inherit from ModelRunnerBase, use WorkerBase instead.
     """
+    # Driver worker for a single tp group (not pp group)
     is_driver_worker: bool
     model_runner: ModelRunnerBase
     observability_config: Optional[ObservabilityConfig] = None
@@ -378,7 +379,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                     model_execute_time + orig_model_execute_time)
             get_pp_group().send_tensor_dict(output.tensors,
                                             all_gather_group=get_tp_group())
-            return [None]
+            return [None], [], []
         if (self.observability_config is not None
                 and self.observability_config.collect_model_execute_time
                 and output is not None):

@@ -1715,7 +1715,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                         "model_forward_time", torch.tensor(0.0)).item()
                 hidden_or_intermediate_states.tensors["model_forward_time"] = (
                     torch.tensor(model_forward_time + orig_model_forward_time))
-            return hidden_or_intermediate_states
+            return hidden_or_intermediate_states, [], []
 
         logits = self.model.compute_logits(hidden_or_intermediate_states,
                                            model_input.sampling_metadata)

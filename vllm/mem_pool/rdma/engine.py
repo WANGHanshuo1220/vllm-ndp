@@ -40,7 +40,8 @@ class cpu_engine():
         self.tp_rank = tp_rank
         self.tp_size = self.parallel_config.tensor_parallel_size
         self.pp_size = self.parallel_config.pipeline_parallel_size
-        self.pp_num_layers = self.model_config.get_num_layers() // self.pp_size
+        self.pp_num_layers = self.model_config.get_num_layers(
+            self.parallel_config) // self.pp_size
 
         self.cpu_kv_dimension = (self.cache_config.block_size *
                                  self.model_config.get_num_attention_heads(

@@ -154,17 +154,20 @@ class cpu_engine():
                 arrival_time=time.time()
             )
 
-            # 1. Check if we can allocate blocks for this seq
-            can_allocate = self.shared_resources.can_allocate(seq_group, self.tp_rank)
+            if not self.shared_resources.has_seq(sequence, self.tp_rank):
+                # 1. Check if we can allocate blocks for this seq
+                can_allocate = self.shared_resources.can_allocate(seq_group, self.tp_rank)
 
-            # 2. Allocate if we can and free some blocks if neccessary
-            if can_allocate == AllocStatus.OK:
-                # allocate blocks
-                self.shared_resources.allocate(seq_group, self.tp_rank)
-            elif can_allocate == AllocStatus.LATER:
-                assert False, "Store KV later is not implemented yet"
+                # 2. Allocate if we can and free some blocks if neccessary
+                if can_allocate == AllocStatus.OK:
+                    # allocate blocks
+                    self.shared_resources.allocate(seq_group, self.tp_rank)
+                elif can_allocate == AllocStatus.LATER:
+                    assert False, "Store KV later is not implemented yet"
+                else:
+                    assert False, "Abort exception is not implemented yet"
             else:
-                assert False, "Abort exception is not implemented yet"
+                print(f"{pp_rank=} arrive, other pp_rank has already stored")
 
             # 3. Store tensors to cpu cache
             allocated_blocks = self.shared_resources.get_blocks(sequence, self.tp_rank)

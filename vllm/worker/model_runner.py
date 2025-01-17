@@ -1544,10 +1544,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         #     print(f"recieved from mp: {response['add_delta']}, {response['pop_delta']}")
         # else:
         #     print(f"Don't have response: {response['has_result']}")
-        for seq_id in seq_ids:
-            self.transfer_task_handlers.pop(seq_id)
-            self.finished_transfer[seq_id] = True
-            print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")
+
 
     def _store_prefilled_kv_helper(
         self, 
@@ -1656,6 +1653,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                         self.store_kv_event_loop.run_until_complete(
                             self.transfer_task_handlers[seq_id]
                         )
+                        self.transfer_task_handlers.pop(seq_id)
+                        self.finished_transfer[seq_id] = True
+                        print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")
 
         seq_ids = list(model_input.request_ids_to_seq_ids.values())
         seq_ids = sum(seq_ids, [])

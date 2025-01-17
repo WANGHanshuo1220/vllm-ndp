@@ -1,3 +1,8 @@
+import time
+import torch
+from typing import List
+import threading
+
 from vllm.config import (CacheConfig, DeviceConfig, ModelConfig, 
                          ParallelConfig, MemPoolConfig, EngineConfig)
 from vllm.sequence import Sequence, SequenceGroup
@@ -5,10 +10,6 @@ from vllm.mem_pool.attention import Attention
 from vllm.core.interfaces import AllocStatus
 from vllm.attention.backends.torch_sdpa import TorchSDPAMetadata
 from vllm.utils import init_logger
-
-import time
-import torch
-from typing import List
 
 from resources import Shared_mem_resources
 
@@ -31,12 +32,16 @@ class cpu_engine():
         engine_config: EngineConfig,
         shared_resources: Shared_mem_resources,
         tp_rank: int,
+        shared_resource_locks: List[threading.Lock]
     ) -> None:
         self.model_config: ModelConfig = engine_config.model_config
         self.mem_pool_config: MemPoolConfig = engine_config.mem_pool_config
         self.parallel_config: ParallelConfig = engine_config.parallel_config
         self.cache_config: CacheConfig = engine_config.cache_config
+        assert(tp_rank < len(shared_resource_locks))
+        self.shared_resource_lock = shared_resource_locks[tp_rank]
 
+        # self.file_name = f"/root/rdma-vllm/vllm-ndp/server_{tp_rank}.log"
         self.tp_rank = tp_rank
         self.tp_size = self.parallel_config.tensor_parallel_size
         self.pp_size = self.parallel_config.pipeline_parallel_size
@@ -115,6 +120,8 @@ class cpu_engine():
 
         assert(len(seq_ids) == len(seq_lengths))
         assert(len(token_ids) == sum(seq_lengths))
+        assert(len(tensor_list) == len(seq_ids), \
+            f"{len(tensor_list)=} vs. {len(seq_ids)=}")
         assert(pp_rank < self.pp_size)
 
         # First free blocks of finished seqs
@@ -154,30 +161,36 @@ class cpu_engine():
                 arrival_time=time.time()
             )
 
-            if not self.shared_resources.has_seq(sequence, self.tp_rank):
-                # 1. Check if we can allocate blocks for this seq
-                can_allocate = self.shared_resources.can_allocate(seq_group, self.tp_rank)
+            with self.shared_resource_lock:
+                if not self.shared_resources.has_seq(sequence, self.tp_rank):
+                    # 1. Check if we can allocate blocks for this seq
+                    can_allocate = self.shared_resources.can_allocate(seq_group, 
+                                                                      self.tp_rank)
 
-                # 2. Allocate if we can and free some blocks if neccessary
-                if can_allocate == AllocStatus.OK:
-                    # allocate blocks
-                    self.shared_resources.allocate(seq_group, self.tp_rank)
-                elif can_allocate == AllocStatus.LATER:
-                    assert False, "Store KV later is not implemented yet"
+                    # 2. Allocate if we can and free some blocks if neccessary
+                    if can_allocate == AllocStatus.OK:
+                        # allocate blocks
+                        self.shared_resources.allocate(seq_group, self.tp_rank)
+                    elif can_allocate == AllocStatus.LATER:
+                        assert False, "Store KV later is not implemented yet"
+                    else:
+                        assert False, "Abort exception is not implemented yet"
                 else:
-                    assert False, "Abort exception is not implemented yet"
-            else:
-                print(f"{pp_rank=} arrive, other pp_rank has already stored")
+                    print(f"{pp_rank=} arrive, other pp_rank has already stored")
 
             # 3. Store tensors to cpu cache
             allocated_blocks = self.shared_resources.get_blocks(sequence, self.tp_rank)
             blocks_reusable = self.shared_resources.get_block_reusable(sequence, self.tp_rank)
-            assert len(allocated_blocks) == len(blocks_reusable)
-            assert len(allocated_blocks) == len(seq_kv_blocks)
+            assert len(allocated_blocks) == len(blocks_reusable), \
+                f"{len(allocated_blocks)} vs. {len(blocks_reusable)}"
+            assert len(allocated_blocks) == len(seq_kv_blocks), \
+                f"{len(allocated_blocks)} vs. {len(seq_kv_blocks)}"
 
             self._store_kv_tensor(
                 pp_rank, seq_id, allocated_blocks, blocks_reusable, seq_kv_blocks
             )
+        
+        recv_handler.clear_tensor_buffer()
 
         add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta(self.tp_rank)
         send_handler.set_all(add_delta, pop_delta)

@@ -1,15 +1,16 @@
+import threading
+from uuid import uuid4
+import time
+from typing import List
+
 from vllm.utils import FlexibleArgumentParser
 from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.utils import init_logger
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.config import EngineConfig
-import threading
 
 from resources import Shared_mem_resources
 from engine import cpu_engine
-from uuid import uuid4
-import os
-import time
 
 try:
     import rdma_server
@@ -36,6 +37,7 @@ def client_loop(
     server: rdma_server.RDMA_Server, 
     engine_config: EngineConfig,
     shared_resources: Shared_mem_resources,
+    locks: List[threading.Lock],
     connection_id: int
 ) -> None:
     # Setup connections
@@ -49,7 +51,8 @@ def client_loop(
     tp_rank = server.get_tp_rank(connection_id)
 
     # Create a CPU engine
-    engine = cpu_engine(engine_config, shared_resources, tp_rank)
+    engine = cpu_engine(engine_config, shared_resources, 
+                        tp_rank, locks)
     server.prepare_recv_data_wr(connection_id)
     server.recv_data_from_client(connection_id)
 
@@ -119,6 +122,7 @@ if __name__=="__main__":
     # Create shared resources (cache_engine and block_manager)
     shared_resources = Shared_mem_resources(engine_config,
                                             num_connections)
+    shared_resources_locks = [threading.Lock() for _ in range(tp_size)]
 
     # Create rdma server
     server = rdma_server.RDMA_Server(tp_size, pp_size, num_engine)
@@ -127,8 +131,11 @@ if __name__=="__main__":
     threads = []
     for i in range(num_connections):
         thread = threading.Thread(target=client_loop, 
-                                  args=(server, engine_config, 
-                                        shared_resources, i))
+                                  args=(server, 
+                                        engine_config, 
+                                        shared_resources, 
+                                        shared_resources_locks,
+                                        i))
         threads.append(thread)
         thread.start()
     

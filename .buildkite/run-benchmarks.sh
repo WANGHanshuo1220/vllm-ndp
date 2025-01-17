@@ -15,7 +15,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # python3 benchmarks/benchmark_throughput.py --input-len 256 --output-len 256 --output-json throughput_results.json 2>&1 | tee benchmark_throughput.txt
 # bench_throughput_exit_code=$?
 
-MODEL_PATH=$HOME/models/Llama-3.1-8B-Instruct
+MODEL_PATH="facebook/opt-125m"
 # MODEL_PATH="meta-llama/Llama-3.2-3B-Instruct"
 DATA_PATH=$HOME/ShareGPT_V3_unfiltered_cleaned_split.json
 
@@ -29,12 +29,12 @@ python3 -m vllm.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.8 \
     --enable-prefix-caching \
     --enable-chunked-prefill False \
-    --pipeline-parallel-size 2 \
+    --tensor-parallel-size 2 \
     --enforce-eager \
     --max-model-len 128 \
     --max-num-seqs 8 \
     --use-v2-block-manager &
-    # --mp-enable --mp_host "1.15.151.193" --mp_port "8080" &
+    # --mp-enable --mp_host "172.16.253.18" --mp_port "3389" &
     # --mp-enable --mp_host "localhost" --mp_port "9999" &
 server_pid=$!
 # wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
@@ -46,7 +46,7 @@ python3 benchmarks/benchmark_serving.py \
     --dataset-name sharegpt \
     --dataset-path ${DATA_PATH} \
     --model ${MODEL_PATH} \
-    --num-prompts 1 \
+    --num-prompts 10 \
     --endpoint /v1/completions \
     --tokenizer ${MODEL_PATH} \
     2>&1 | tee benchmark_serving.txt

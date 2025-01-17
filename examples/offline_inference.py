@@ -19,10 +19,11 @@ llm = LLM(model="/root/model/meta-llama/Llama-3.1-8B-Instruct",
           use_v2_block_manager=True,
           enable_prefix_caching=True,
           enable_chunked_prefill=False,
+          tensor_parallel_size=4,
           max_model_len=64,
           max_num_seqs=8,
-          worker_use_ray=False,)
-        #   mp_enable=True, mp_host="172.16.253.20", mp_port="3389")
+          worker_use_ray=False,
+          mp_enable=True, mp_host="172.16.253.18", mp_port="3389")
 
 prompts = [
     # "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",

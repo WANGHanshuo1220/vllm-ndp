@@ -14,7 +14,8 @@ try:
     MAX_BATCH_SIZE = rdma_data_struct.MAX_BATCH_SIZE
     MAX_SEQ_LENGTH = rdma_data_struct.MAX_SEQ_LENGTH
     HIDDEN_SIZE = rdma_data_struct.HIDDEN_SIZE
-    NUM_HEADS = rdma_data_struct.NUM_HEADS
+    NUM_ATTN_HEADS = rdma_data_struct.NUM_ATTN_HEADS
+    NUM_KV_HEADS = rdma_data_struct.NUM_KV_HEADS
     NUM_LAYER = rdma_data_struct.NUM_LAYER
 except:
     print("No rdma_data_struct found. MemoryPool should be disabled")
@@ -23,7 +24,8 @@ except:
     MAX_BATCH_SIZE = None
     MAX_SEQ_LENGTH = None
     HIDDEN_SIZE = None
-    NUM_HEADS = None
+    NUM_ATTN_HEADS = None
+    NUM_KV_HEADS = None
     NUM_LAYER = None
 
 
@@ -86,7 +88,7 @@ class RemoteConnector():
                 block_layers = []
                 for j in range(NUM_LAYER):
                     layer_tensor = torch.rand(
-                        [2, BLOCK_SIZE, NUM_HEADS//tp_size, HIDDEN_SIZE//NUM_HEADS],
+                        [2, BLOCK_SIZE, NUM_KV_HEADS//tp_size, HIDDEN_SIZE//NUM_ATTN_HEADS],
                         dtype=torch.float16
                     )
                     block_layers.append(layer_tensor)
@@ -121,7 +123,8 @@ class RemoteConnector():
             for block_layers in tensors[i]:
                 assert(len(block_layers) == NUM_LAYER//self.pp_size)
                 for t in block_layers:
-                    assert t.shape == (2, BLOCK_SIZE, NUM_HEADS//self.tp_size, HIDDEN_SIZE//NUM_HEADS)
+                    assert t.shape == (2, BLOCK_SIZE, NUM_KV_HEADS//self.tp_size, HIDDEN_SIZE//NUM_ATTN_HEADS), \
+                        f"{t.shape} vs. {2, BLOCK_SIZE, NUM_KV_HEADS//self.tp_size, HIDDEN_SIZE//NUM_ATTN_HEADS}"
 
         self.prefill_handler.set_all(
             self.engine_id,

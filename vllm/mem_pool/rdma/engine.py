@@ -49,7 +49,7 @@ class cpu_engine():
             self.parallel_config) // self.pp_size
 
         self.cpu_kv_dimension = (self.cache_config.block_size *
-                                 self.model_config.get_num_attention_heads(
+                                 self.model_config.get_num_kv_heads(
                                      self.parallel_config) *
                                  self.model_config.get_head_size())
 

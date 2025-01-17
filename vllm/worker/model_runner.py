@@ -1541,10 +1541,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         with self.delta_lock:
             self.add_delta.extend(add_delta)
             self.pop_delta.extend(pop_delta)
-        #     print(f"recieved from mp: {response['add_delta']}, {response['pop_delta']}")
-        # else:
-        #     print(f"Don't have response: {response['has_result']}")
-
 
     def _store_prefilled_kv_helper(
         self, 

@@ -2,7 +2,7 @@ import psutil
 from typing import List, Dict, Tuple, Optional, AsyncGenerator
 from vllm.core.block_manager_v2 import BlockSpaceManagerV2
 from vllm.core.block.block_table import BlockTable
-from vllm.worker.cpu_worker import CPUCacheEngine
+from vllm.mem_pool.rdma.cpu_cache_engine import CPUCacheEngine
 from vllm.executor.cpu_executor import _verify_and_get_model_config
 from vllm.sequence import Sequence, SequenceGroup
 from vllm.core.interfaces import AllocStatus

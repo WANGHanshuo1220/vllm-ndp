@@ -46,7 +46,7 @@ class cpu_engine():
         self.tp_size = self.parallel_config.tensor_parallel_size
         self.pp_size = self.parallel_config.pipeline_parallel_size
         self.pp_num_layers = self.model_config.get_num_layers(
-            self.parallel_config) // self.pp_size
+            self.parallel_config)
 
         self.cpu_kv_dimension = (self.cache_config.block_size *
                                  self.model_config.get_num_kv_heads(
@@ -100,8 +100,9 @@ class cpu_engine():
             block_id = allocated_blocks[i]
             if not blocks_reusable[i]:
                 for r_layer_idx in range(len(layer_tensors)):
+                    tensor = layer_tensors[r_layer_idx].view(2, self.cpu_kv_dimension)
                     abs_layer_idx = r_layer_idx + layer_base
-                    tensor = layer_tensors[abs_layer_idx].view(2, self.cpu_kv_dimension)
+                    assert(abs_layer_idx < rdma_data_struct.NUM_LAYER)
                     self.shared_resources.set_kv_tensor(abs_layer_idx, block_id, 
                                                         tensor, self.tp_rank)
 
@@ -125,15 +126,25 @@ class cpu_engine():
         assert(pp_rank < self.pp_size)
 
         # First free blocks of finished seqs
-        for to_free_seq_id in to_free_seq_ids:
-            block_table = self.shared_resources.get_block_table(to_free_seq_id, self.tp_rank)
-            to_free_token_ids = block_table._get_all_token_ids()
-            to_free_sequence = Sequence(
-                seq_id=to_free_seq_id,
-                inputs={"prompt_token_ids": to_free_token_ids},
-                block_size=self.cache_config.block_size,
-            )
-            self.shared_resources.free_seq(to_free_sequence, self.tp_rank)
+        with self.shared_resource_lock:
+            for to_free_seq_id in to_free_seq_ids:
+                dummy_sequence = Sequence(
+                    seq_id=to_free_seq_id,
+                    inputs={"prompt_token_ids": {0}},
+                    block_size=self.cache_config.block_size,
+                )
+                if not self.shared_resources.has_seq(dummy_sequence, 
+                                                     self.tp_rank):
+                    continue
+                block_table = self.shared_resources.get_block_table(
+                    to_free_seq_id, self.tp_rank)
+                to_free_token_ids = block_table._get_all_token_ids()
+                to_free_sequence = Sequence(
+                    seq_id=to_free_seq_id,
+                    inputs={"prompt_token_ids": to_free_token_ids},
+                    block_size=self.cache_config.block_size,
+                )
+                self.shared_resources.free_seq(to_free_sequence, self.tp_rank)
 
         seqs_token_ids = []
         start = 0
@@ -175,8 +186,8 @@ class cpu_engine():
                         assert False, "Store KV later is not implemented yet"
                     else:
                         assert False, "Abort exception is not implemented yet"
-                else:
-                    print(f"{pp_rank=} arrive, other pp_rank has already stored")
+                # else:
+                #     print(f"{pp_rank=} arrive, other pp_rank has already stored")
 
             # 3. Store tensors to cpu cache
             allocated_blocks = self.shared_resources.get_blocks(sequence, self.tp_rank)

@@ -1,5 +1,0 @@
-Namespace(backend='vllm', base_url=None, host='localhost', port=8000, endpoint='/v1/completions', dataset=None, dataset_name='sharegpt', dataset_path='/root/ShareGPT_V3_unfiltered_cleaned_split.json', model='/root/model/meta-llama/Llama-3.1-8B-Instruct', tokenizer='/root/model/meta-llama/Llama-3.1-8B-Instruct', best_of=1, use_beam_search=False, num_prompts=10, sharegpt_output_len=None, sonnet_input_len=550, sonnet_output_len=150, logprobs=None, sonnet_prefix_len=200, random_input_len=1024, random_output_len=128, random_range_ratio=1.0, random_prefix_len=0, request_rate=inf, seed=0, trust_remote_code=False, disable_tqdm=False, profile=False, save_result=False, metadata=None, result_dir=None, result_filename=None, percentile_metrics='ttft,tpot,itl', metric_percentiles='99')
-Starting initial single prompt test run...
-Initial test run completed. Starting main benchmark run...
-Traffic request rate: inf
-  0%|          | 0/10 [00:00<?, ?it/s]

@@ -132,6 +132,12 @@ class MultiprocessingGPUExecutor(DistributedGPUExecutor):
         world_size = self.parallel_config.world_size
         tensor_parallel_size = self.parallel_config.tensor_parallel_size
 
+        if "VLLM_INSTANCE_ID" not in os.environ:
+            print(f"set vllm {self.engine_id=}")
+            update_environment_variables({
+                "VLLM_INSTANCE_ID": str(self.engine_id)
+            })
+
         # Set CUDA_VISIBLE_DEVICES for the driver, inherited by workers
         if "CUDA_VISIBLE_DEVICES" not in os.environ:
             update_environment_variables({

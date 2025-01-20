@@ -224,6 +224,7 @@ class LLMEngine:
         stat_loggers: Optional[Dict[str, StatLoggerBase]] = None,
         input_registry: InputRegistry = INPUT_REGISTRY,
         mem_pool_config: Optional[MemPoolConfig] = None,
+        engine_id: Optional[int] = 0,
     ) -> None:
         logger.info(
             "Initializing an LLM engine (v%s) with config: "
@@ -281,8 +282,6 @@ class LLMEngine:
         # self.engine_id = f"engine_{random_uuid()}"
         self.engine_id = secrets.randbits(32)
 
-        print(f"{engine_id=}")
-
         self.model_config = model_config
         self.cache_config = cache_config
         self.lora_config = lora_config
@@ -337,6 +336,7 @@ class LLMEngine:
             prompt_adapter_config=prompt_adapter_config,
             observability_config=self.observability_config,
             mem_pool_config = self.mem_pool_config,
+            engine_id=engine_id,
         )
 
         if not self.model_config.embedding_mode:
@@ -572,6 +572,7 @@ class LLMEngine:
             log_stats=not engine_args.disable_log_stats,
             usage_context=usage_context,
             stat_loggers=stat_loggers,
+            engine_id=engine_args.engine_id,
         )
 
         return engine

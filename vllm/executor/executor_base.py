@@ -34,6 +34,7 @@ class ExecutorBase(ABC):
         prompt_adapter_config: Optional[PromptAdapterConfig],
         observability_config: Optional[ObservabilityConfig],
         mem_pool_config: Optional[MemPoolConfig],
+        engine_id: Optional[int] = 0,
     ) -> None:
         self.model_config = model_config
         self.cache_config = cache_config
@@ -46,6 +47,7 @@ class ExecutorBase(ABC):
         self.prompt_adapter_config = prompt_adapter_config
         self.observability_config = observability_config
         self.mem_pool_config = mem_pool_config
+        self.engine_id = engine_id
 
         self._init_executor()
 

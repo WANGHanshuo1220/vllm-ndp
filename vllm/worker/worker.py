@@ -191,7 +191,7 @@ class Worker(LocalOrDistributedWorkerBase):
         set_random_seed(self.model_config.seed)
 
     def init_mempool_connector(self) -> None:
-        engine_id = hash(get_vllm_instance_id()) & 0xFFFFFFFF
+        engine_id = int(get_vllm_instance_id())
 
         tp_rank = get_tensor_model_parallel_rank()
         tp_size = get_tensor_model_parallel_world_size()

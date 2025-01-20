@@ -661,6 +661,8 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             block.block_id = block_id  # Assign block_id
 
     def get_cached_blocks_delta(self, engine_id: int) -> Tuple[List[int], List[int]]:
+        assert(engine_id < len(self._cached_blocks_add_delta))
+        assert(engine_id < len(self._cached_blocks_pop_delta))
         add_delta = self._cached_blocks_add_delta[engine_id].copy()
         pop_delta = self._cached_blocks_pop_delta[engine_id].copy()
         self._cached_blocks_add_delta[engine_id].clear()

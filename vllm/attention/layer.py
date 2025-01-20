@@ -14,6 +14,7 @@ from vllm.model_executor.layers.quantization.kv_cache import BaseKVCacheMethod
 
 # from vllm.mem_pool.tcp.connector import RemoteConnector
 from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
+from vllm.utils import log_to_file
 import asyncio
 
 class Attention(nn.Module):
@@ -57,6 +58,8 @@ class Attention(nn.Module):
             sliding_window = None
         if num_kv_heads is None:
             num_kv_heads = num_heads
+        
+        # self.file_name = f"/root/rdma-vllm/vllm-ndp/layer.log"
 
         # The default k/v_scale is set to 1.0. This is ignored
         # when kv-cache is not fp8, and should be used with
@@ -117,6 +120,11 @@ class Attention(nn.Module):
         if (Attention._connector is not None
             and attn_metadata.decode_metadata is not None
             and seqs_data is not None):
+        
+            # assert(query.shape[0] == key.shape[0])
+            # assert(query.shape[0] == value.shape[0])
+            # assert(query.shape[0] >= len(seqs_data), 
+            #        f"{query.shape[0]=}, {len(seqs_data)=}")
 
             # TODO:Here we need to invoke remote memory pool
             # to compute attention. 

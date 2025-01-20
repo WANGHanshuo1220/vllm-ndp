@@ -1533,9 +1533,9 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # sequences -> blocks -> layers
         tensor_list: List[List[List[torch.tensor]]],
     ) -> None:
-        for seq_id in seq_ids:
-            self.kv_transfer_time[seq_id] = time.time()
-            logger.info(f"send {seq_id} at {time.time():.4f}")
+        # for seq_id in seq_ids:
+        #     self.kv_transfer_time[seq_id] = time.time()
+        #     logger.info(f"send {seq_id} at {time.time():.4f}")
         (add_delta, pop_delta) = self.connector.store_kv(
             seq_ids, seq_lengths, token_ids, free_seq_ids, tensor_list)
         with self.delta_lock:
@@ -1651,7 +1651,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                         )
                         self.transfer_task_handlers.pop(seq_id)
                         self.finished_transfer[seq_id] = True
-                        print(f"{seq_id} transfer time = {time.time() - self.kv_transfer_time[seq_id]}")
+                        # print(f"{seq_id} transfer time = "
+                        #       f"{time.time() - self.kv_transfer_time[seq_id]}")
 
         seq_ids = list(model_input.request_ids_to_seq_ids.values())
         seq_ids = sum(seq_ids, [])

@@ -144,14 +144,14 @@ class ProcessWorkerWrapper:
     """Local process wrapper for vllm.worker.Worker,
     for handling single-node multi-GPU tensor parallel."""
 
-    def __init__(self, result_handler: ResultHandler,
+    def __init__(self, rank: int, result_handler: ResultHandler,
                  worker_factory: Callable[[], Any]) -> None:
         self._task_queue = mp.Queue()
         self.result_queue = result_handler.result_queue
         self.tasks = result_handler.tasks
         self.process: BaseProcess = mp.Process(  # type: ignore[attr-defined]
             target=_run_worker_process,
-            name="VllmWorkerProcess",
+            name=f"VllmWorkerProcess-{rank}",
             kwargs=dict(
                 worker_factory=worker_factory,
                 task_queue=self._task_queue,

@@ -173,7 +173,7 @@ class RemoteConnector():
         )
 
         self.client.client_remote_data_processing()
-        return self.output_handler.get_tensor()
+        return self.output_handler.get_tensor(query.shape[0])
 
 def run_prefill(client):
     engine_id = 1

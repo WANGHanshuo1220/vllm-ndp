@@ -87,6 +87,7 @@ class MultiprocessingGPUExecutor(DistributedGPUExecutor):
             result_handler = ResultHandler()
             for rank in range(1, world_size):
                 worker = ProcessWorkerWrapper(
+                    rank,
                     result_handler,
                     partial(
                         create_worker,

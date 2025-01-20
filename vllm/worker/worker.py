@@ -1,6 +1,7 @@
 """A GPU worker class."""
 import gc
 import os
+import multiprocessing
 from typing import Dict, List, Optional, Set, Tuple, Type, Union
 
 import torch
@@ -33,7 +34,7 @@ from vllm.worker.enc_dec_model_runner import EncoderDecoderModelRunner
 from vllm.worker.model_runner import GPUModelRunnerBase, ModelRunner
 from vllm.worker.worker_base import LocalOrDistributedWorkerBase, WorkerInput
 from vllm.mem_pool.rdma.connector_rdma import RemoteConnector
-from vllm.utils import get_vllm_instance_id
+from vllm.utils import (get_vllm_instance_id, log_to_file)
 
 logger = init_logger(__name__)
 

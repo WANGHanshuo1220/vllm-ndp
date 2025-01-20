@@ -162,6 +162,7 @@ class RemoteConnector():
         tensor = [query, key, value]
 
         self.decode_handler.set_all(
+            self.engine_id,
             self.tp_rank,
             max_decode_seq_len,
             num_decode_tokens,

@@ -206,7 +206,8 @@ class BlockAllocator(ABC):
         pass
 
     @abstractmethod
-    def get_cached_blocks_delta(self, device: Device) -> Tuple[List[int], List[int]]:
+    def get_cached_blocks_delta(self, engine_id: int, 
+                                device: Device) -> Tuple[List[int], List[int]]:
         """Get delta cached blocks' hash values"""
         pass
 

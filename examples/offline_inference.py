@@ -23,19 +23,12 @@ llm = LLM(model="/root/model/meta-llama/Llama-3.1-8B-Instruct",
           pipeline_parallel_size=1,
           max_model_len=64,
           max_num_seqs=8,
-          worker_use_ray=False,
-          mp_enable=True, mp_host="172.16.253.12", mp_port="3389")
+          worker_use_ray=False,)
+        #   mp_enable=True, mp_host="172.16.253.12", mp_port="3389")
 
 prompts = [
     # "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",
     "The capital of France is",
-    "Self-attention is an essential component of large language models (LLM) but a significant source of inference latency for long sequences. ",
-    "Self-attention is an essential component of large language models (LLM) but a significant source of inference latency for long sequences. ",
-    "Self-attention is an essential component of large language models (LLM) but a significant source of inference latency for long sequences. ",
-    "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",
-    "In multi-tenant LLM serving scenarios, the compute and memory operation cost of self-attention can be optimized by using the probability that multiple LLM requests have shared system prompts in prefixes.",
-    "The capital of France is",
-    "The future of AI is",
 ]
 outputs = llm.generate(prompts, sampling_params)
 # Print the outputs.

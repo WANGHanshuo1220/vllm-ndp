@@ -281,6 +281,8 @@ class LLMEngine:
         # self.engine_id = f"engine_{random_uuid()}"
         self.engine_id = secrets.randbits(32)
 
+        print(f"{engine_id=}")
+
         self.model_config = model_config
         self.cache_config = cache_config
         self.lora_config = lora_config

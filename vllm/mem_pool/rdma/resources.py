@@ -1,6 +1,6 @@
 import psutil
 from typing import List, Dict, Tuple, Optional, AsyncGenerator
-from vllm.core.block_manager_v2 import BlockSpaceManagerV2
+from vllm.mem_pool.rdma.block_manager_v2 import BlockSpaceManagerV2
 from vllm.core.block.block_table import BlockTable
 from vllm.mem_pool.rdma.cpu_cache_engine import CPUCacheEngine
 from vllm.executor.cpu_executor import _verify_and_get_model_config
@@ -27,6 +27,7 @@ class Shared_mem_resources():
         self,
         engine_config: EngineConfig,
         connections: int,
+        num_engine: int,
     ) -> None:
         self.model_config: ModelConfig = engine_config.model_config
         self.cache_config: CacheConfig = engine_config.cache_config
@@ -48,7 +49,7 @@ class Shared_mem_resources():
         self.tp_size = self.parallel_config.tensor_parallel_size
         for _ in range(self.tp_size):
             self.cache_enigne.append(self._create_cache_engine())
-            self.block_manager.append(self._create_block_manager())
+            self.block_manager.append(self._create_block_manager(num_engine))
 
 
     def _create_cache_engine(self) -> CPUCacheEngine:
@@ -69,7 +70,7 @@ class Shared_mem_resources():
                               self.parallel_config, self.device_config)
 
 
-    def _create_block_manager(self) -> BlockSpaceManagerV2:
+    def _create_block_manager(self, num_engine: int) -> BlockSpaceManagerV2:
         num_gpu_blocks = self.cache_config.num_gpu_blocks
         if num_gpu_blocks:
             num_gpu_blocks //= self.parallel_config.pipeline_parallel_size
@@ -83,7 +84,8 @@ class Shared_mem_resources():
             num_gpu_blocks=num_gpu_blocks,
             num_cpu_blocks=num_cpu_blocks,
             sliding_window=self.cache_config.sliding_window,
-            enable_caching=True)
+            enable_caching=True,
+            num_engine=num_engine)
 
     
     def _get_reserved_cpu_memory(self):
@@ -214,7 +216,10 @@ class Shared_mem_resources():
     def get_cached_blocks_delta(
         self,
         tp_rank: int,
+        engine_id: int,
     ) -> Tuple[List[int], List[int]]:
-        return self.block_manager[tp_rank].get_cached_blocks_delta()
+        return self.block_manager[tp_rank].get_cached_blocks_delta(
+            engine_id
+        )
     
     

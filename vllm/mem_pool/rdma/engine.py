@@ -57,6 +57,8 @@ class cpu_engine():
         self.shared_resources = shared_resources
         self.attention_unit = self._create_attention()
 
+        self.engine_id = None
+
 
     def _create_attention(self) -> Attention:
         self.num_heads = self.model_config.get_num_attention_heads(
@@ -112,12 +114,22 @@ class cpu_engine():
         recv_handler: rdma_data_struct.ClientSendKVCache,
         send_handler: rdma_data_struct.ClientRecvCacheInfo,
     ):
+        if self.engine_id is None:
+            self.engine_id = recv_handler.get_engine_id()
+            print(f"***********{self.engine_id=}***********")
+        
         seq_ids = recv_handler.get_seq_ids()
         token_ids = recv_handler.get_token_ids()
         tensor_list = recv_handler.get_tensor()
         to_free_seq_ids = recv_handler.get_to_free_seq_ids()
         seq_lengths = recv_handler.get_seq_lengths()
         pp_rank = recv_handler.get_pp_rank()
+
+        # make seq_id unique for each engine
+        for i in range(len(seq_ids)):
+            seq_ids[i] += self.engine_id
+        for i in range(len(to_free_seq_ids)):
+            to_free_seq_ids[i] += self.engine_id
 
         assert(len(seq_ids) == len(seq_lengths))
         assert(len(token_ids) == sum(seq_lengths))
@@ -203,7 +215,8 @@ class cpu_engine():
         
         recv_handler.clear_tensor_buffer()
 
-        add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta(self.tp_rank)
+        add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta(
+            self.tp_rank, self.engine_id)
         send_handler.set_all(add_delta, pop_delta)
 
             
@@ -248,6 +261,10 @@ class cpu_engine():
         recv_handler: rdma_data_struct.ClientSendQKV,
         send_handler: rdma_data_struct.ClientRecvOutput,
     ) -> None:
+        engine_id = recv_handler.get_engine_id()
+        assert self.engine_id is not None
+        assert self.engine_id == engine_id
+
         qkv = recv_handler.get_tensor()
         query = qkv[0]
         key = qkv[1]
@@ -269,6 +286,10 @@ class cpu_engine():
         all_token_ids = recv_handler.get_token_ids()
         seq_lengths = recv_handler.get_seq_lengths()
         assert(len(seq_ids) == len(seq_lengths))
+
+        # make seq_id unique for each engine
+        for i in range(len(seq_ids)):
+            seq_ids[i] += self.engine_id
 
         seqs_token_ids = []
         start = 0

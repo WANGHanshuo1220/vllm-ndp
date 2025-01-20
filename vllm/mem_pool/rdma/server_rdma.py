@@ -104,6 +104,9 @@ if __name__=="__main__":
     parser = FlexibleArgumentParser(
         description="Memory pool server.")
     parser = make_arg_parser(parser)
+    parser.add_argument("--num-engines",
+                        type=int,
+                        default=1,)
     args = parser.parse_args()
 
     # Create engine config
@@ -111,7 +114,7 @@ if __name__=="__main__":
     engine_config = engine_args.create_engine_config()
 
     # Get connections in this cluster
-    num_engine = 1
+    num_engine = args.num_engines
     tp_size = engine_config.parallel_config.tensor_parallel_size
     pp_size = engine_config.parallel_config.pipeline_parallel_size
     num_connections = tp_size * pp_size * num_engine
@@ -121,7 +124,8 @@ if __name__=="__main__":
 
     # Create shared resources (cache_engine and block_manager)
     shared_resources = Shared_mem_resources(engine_config,
-                                            num_connections)
+                                            num_connections,
+                                            num_engine)
     shared_resources_locks = [threading.Lock() for _ in range(tp_size)]
 
     # Create rdma server

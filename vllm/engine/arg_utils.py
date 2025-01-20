@@ -167,6 +167,9 @@ class EngineArgs:
     mp_host: Optional[str] = None
     mp_port: Optional[str] = None
 
+    # engine_id from command line
+    engine_id: Optional[int] = None
+
     def __post_init__(self):
         if self.tokenizer is None:
             self.tokenizer = self.model
@@ -786,6 +789,9 @@ class EngineArgs:
                             help="Memory pool host name")
         parser.add_argument("--mp-port", type=int, default=9999, 
                             help="Mempry pool port number")
+
+        parser.add_argument("--engine-id", type=int, default=0, 
+                            help="engine_id of this vllm instance")
 
         return parser
 

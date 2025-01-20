@@ -4,4 +4,5 @@ python vllm/mem_pool/rdma/server_rdma.py \
     --swap-space 1 \
     --tensor-parallel 1 \
     --pipeline-parallel 1 \
+    --num_engines 2 \
     --model /root/model/meta-llama/Llama-3.1-8B-Instruct/ 

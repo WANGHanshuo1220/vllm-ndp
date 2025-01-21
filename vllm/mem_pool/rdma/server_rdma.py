@@ -107,6 +107,9 @@ if __name__=="__main__":
     parser.add_argument("--num-engines",
                         type=int,
                         default=1,)
+    parser.add_argument("--ports", nargs='+', type=int, 
+                        default=[i+10000 for i in range(5)], 
+                        help="List of ports.")
     args = parser.parse_args()
 
     # Create engine config
@@ -114,6 +117,7 @@ if __name__=="__main__":
     engine_config = engine_args.create_engine_config()
 
     # Get connections in this cluster
+    mn_ports = args.ports
     num_engine = args.num_engines
     tp_size = engine_config.parallel_config.tensor_parallel_size
     pp_size = engine_config.parallel_config.pipeline_parallel_size
@@ -129,8 +133,9 @@ if __name__=="__main__":
     shared_resources_locks = [threading.Lock() for _ in range(tp_size)]
 
     # Create rdma server
-    server = rdma_server.RDMA_Server(tp_size, pp_size, num_engine)
-    server.start_rdma_server(3389)
+    server = rdma_server.RDMA_Server(tp_size, pp_size, 
+                                     num_engine, mn_ports)
+    server.start_rdma_server()
 
     threads = []
     for i in range(num_connections):

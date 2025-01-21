@@ -21,10 +21,13 @@ except:
 
 logger = init_logger(__name__)
 
+ENGINE_REQ_GAP = 10000
+
 def log_to_file(file_name, log_message):
     log_message += f" ({time.time()})"
     with open(file_name, "a") as log_file:
         log_file.write(log_message + "\n")
+
 
 class cpu_engine():
     def __init__(
@@ -58,7 +61,7 @@ class cpu_engine():
         self.attention_unit = self._create_attention()
 
         self.engine_id = None
-
+        self.seq_id_offset = None
 
     def _create_attention(self) -> Attention:
         self.num_heads = self.model_config.get_num_attention_heads(
@@ -88,7 +91,6 @@ class cpu_engine():
             mem_pool_config=self.mem_pool_config
         )
 
-
     def _store_kv_tensor(
         self,
         pp_rank: int,
@@ -108,7 +110,6 @@ class cpu_engine():
                     self.shared_resources.set_kv_tensor(abs_layer_idx, block_id, 
                                                         tensor, self.tp_rank)
 
-
     def save_kv_cache(
         self,
         recv_handler: rdma_data_struct.ClientSendKVCache,
@@ -116,7 +117,7 @@ class cpu_engine():
     ):
         if self.engine_id is None:
             self.engine_id = recv_handler.get_engine_id()
-            print(f"***********{self.engine_id=}***********")
+            self.seq_id_offset = self.engine_id * ENGINE_REQ_GAP
         
         seq_ids = recv_handler.get_seq_ids()
         token_ids = recv_handler.get_token_ids()
@@ -127,9 +128,9 @@ class cpu_engine():
 
         # make seq_id unique for each engine
         for i in range(len(seq_ids)):
-            seq_ids[i] += self.engine_id
+            seq_ids[i] += self.seq_id_offset
         for i in range(len(to_free_seq_ids)):
-            to_free_seq_ids[i] += self.engine_id
+            to_free_seq_ids[i] += self.seq_id_offset
 
         assert(len(seq_ids) == len(seq_lengths))
         assert(len(token_ids) == sum(seq_lengths))
@@ -218,7 +219,6 @@ class cpu_engine():
         add_delta, pop_delta = self.shared_resources.get_cached_blocks_delta(
             self.tp_rank, self.engine_id)
         send_handler.set_all(add_delta, pop_delta)
-
             
     def _create_cpu_attn_metadata(
         self,
@@ -240,7 +240,6 @@ class cpu_engine():
         )
         return cpu_attn_metadata
 
-
     def _convert_list_to_tensor_padding(
         self, 
         _block_tables: List
@@ -254,7 +253,6 @@ class cpu_engine():
                                            dtype=torch.int32)
         
         return tensor_block_tables
-
 
     def compute_attention(
         self,
@@ -289,7 +287,7 @@ class cpu_engine():
 
         # make seq_id unique for each engine
         for i in range(len(seq_ids)):
-            seq_ids[i] += self.engine_id
+            seq_ids[i] += self.seq_id_offset
 
         seqs_token_ids = []
         start = 0
